@@ -106,3 +106,35 @@ class Database:
     def ottieni_antropometria_atleta(self, atleta_id):
         res = self.supabase.table("antropometria").select("id, data_rilevazione, altezza, peso, reach1, vertec1, jump1, reach2, vertec2, jump2").eq("atleta_id", atleta_id).order("id", desc=True).execute()
         return [(i["id"], i["data_rilevazione"], i["altezza"], i["peso"], i["reach1"], i["vertec1"], i["jump1"], i["reach2"], i["vertec2"], i["jump2"]) for i in res.data]
+def ottieni_tutti_atleti_completi(self):
+        """Recupera tutti gli atleti con i dati anagrafici e la squadra associata."""
+        cursor = self.conn.cursor()
+        query = """
+            SELECT 
+                a.id, a.nome, a.cognome, a.ruolo, a.numero,
+                s.nome AS squadra, s.categoria,
+                a.data_nascita, a.luogo_nascita, a.codice_fiscale,
+                a.indirizzo, a.citta, a.cap, a.nazionalita, a.scadenza_visita
+            FROM atleti a
+            LEFT JOIN squadre s ON a.squadra_id = s.id
+            ORDER BY s.nome, a.cognome, a.nome
+        """
+        cursor.execute(query)
+        return cursor.fetchall()
+
+    def ottieni_tutte_antropometrie_complete(self):
+        """Recupera lo storico di tutte le misurazioni antropometriche e salti con il nome dell'atleta."""
+        cursor = self.conn.cursor()
+        query = """
+            SELECT 
+                ant.id, a.cognome, a.nome, s.nome AS squadra,
+                ant.data_rilevazione, ant.altezza, ant.peso,
+                ant.reach1, ant.vertec1, ant.jump1,
+                ant.reach2, ant.vertec2, ant.jump2
+            FROM antropometria ant
+            JOIN atleti a ON ant.atleta_id = a.id
+            LEFT JOIN squadre s ON a.squadra_id = s.id
+            ORDER BY ant.data_rilevazione DESC, a.cognome
+        """
+        cursor.execute(query)
+        return cursor.fetchall()

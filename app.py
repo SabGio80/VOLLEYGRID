@@ -1,7 +1,15 @@
+import io
 import streamlit as st
 import pandas as pd
 import base64
+from datetime import datetime
 from database import Database
+
+# Import ReportLab per l'esportazione PDF
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
 st.set_page_config(page_title="Gestionale Pallavolo Web", layout="wide")
 
@@ -10,8 +18,6 @@ db.inizializza_db()
 
 # --- GESTIONE LOGIN E RUOLI ---
 def verifica_login(username, password):
-    # Ripristina/adatta questa chiamata con la tua funzione DB/Supabase
-    # Esempio basato su query utenti:
     if hasattr(db, 'verifica_utente'):
         return db.verifica_utente(username, password)
     
@@ -44,7 +50,7 @@ if not st.session_state.logged_in:
             st.rerun()
         else:
             st.error("Credenziali errate.")
-    st.stop() # Blocca l'esecuzione se non si è loggati
+    st.stop()
 
 # Flag di controllo permessi Admin vs Viewer
 is_admin = (st.session_state.user_role == "admin")
@@ -68,6 +74,81 @@ def file_to_base64(uploaded_file):
         b64_str = base64.b64encode(bytes_data).decode("utf-8")
         return f"data:{mime_type};base64,{b64_str}"
     return None
+
+def genera_pdf_report(df, titolo="Report Gestionale Pallavolo"):
+    """Genera un file PDF formattato in formato orizzontale a partire da un DataFrame."""
+    buffer = io.BytesIO()
+    
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(letter),
+        rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
+    )
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'TitleStyle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        leading=20,
+        textColor=colors.HexColor('#1E3A8A'),
+        spaceAfter=6
+    )
+    subtitle_style = ParagraphStyle(
+        'SubTitleStyle',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=colors.gray,
+        spaceAfter=15
+    )
+    cell_style = ParagraphStyle(
+        'CellStyle',
+        parent=styles['Normal'],
+        fontSize=8,
+        leading=10
+    )
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Normal'],
+        fontSize=8,
+        leading=10,
+        textColor=colors.white,
+        fontName='Helvetica-Bold'
+    )
+    
+    elements.append(Paragraph(titolo, title_style))
+    data_ora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    elements.append(Paragraph(f"Generato il: {data_ora}", subtitle_style))
+    
+    headers = [Paragraph(str(col), header_style) for col in df.columns]
+    data_table = [headers]
+    
+    for row in df.itertuples(index=False):
+        row_data = []
+        for val in row:
+            text = "" if pd.isna(val) else str(val)
+            row_data.append(Paragraph(text, cell_style))
+        data_table.append(row_data)
+        
+    t = Table(data_table, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('TOPPADDING', (0, 0), (-1, 0), 6),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#D1D5DB')),
+        ('TOPPADDING', (0, 1), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+    ]))
+    
+    elements.append(t)
+    doc.build(elements)
+    
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # --- INIZIALIZZAZIONE SESSION STATE ---
 if "mostra_form_stagione" not in st.session_state:
@@ -152,7 +233,7 @@ with col_top3:
 st.divider()
 
 # --- TABS PRINCIPALI ---
-tabs = ["Gestione Squadre", "Rosa Atleti"]
+tabs = ["Gestione Squadre", "Rosa Atleti", "Reportistica"]
 
 if "target_tab" in st.session_state:
     st.session_state.nav_tab = st.session_state.target_tab
@@ -181,7 +262,6 @@ if st.session_state.active_tab == "Gestione Squadre":
         nome_sq = st.text_input("Nome Squadra", value=st.session_state.input_nome_sq, disabled=not is_admin)
         cat_sq = st.text_input("Categoria", value=st.session_state.input_cat_sq, disabled=not is_admin)
         
-        # DISABILITATO PER VIEWER
         if st.button("Salva Squadra", disabled=not is_admin):
             if nome_sq and stagione_id:
                 db.aggiungi_squadra(nome_sq, cat_sq, stagione_id)
@@ -299,7 +379,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
                     
                     col_b1, col_b2 = st.columns(2)
                     with col_b1:
-                        # DISABILITATO PER VIEWER
                         if st.button("Aggiorna Atleta", type="primary", disabled=not is_admin):
                             if nome and cognome:
                                 foto_b64 = file_to_base64(foto_file) if foto_file else None
@@ -322,7 +401,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
                     
                     col_nb1, col_nb2 = st.columns(2)
                     with col_nb1:
-                        # DISABILITATO PER VIEWER
                         if st.button("Aggiungi Atleta", type="primary", disabled=not is_admin):
                             if nome and cognome:
                                 foto_b64 = file_to_base64(foto_file) if foto_file else None
@@ -355,7 +433,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
                                 naz = st.text_input("Nazionalità", value=curr[11] or "", key=f"naz_{atleta_id_scelto}", disabled=not is_admin)
                                 vis = st.text_input("Scadenza Visita (GG/MM/AAAA)", value=curr[12] or "", key=f"vis_{atleta_id_scelto}", disabled=not is_admin)
                                 
-                                # DISABILITATO PER VIEWER
                                 if st.button("Aggiorna Anagrafica", disabled=not is_admin):
                                     db.aggiorna_anagrafica_atleta(atleta_id_scelto, dn, ln, cf, ind, cit, cap, naz, vis)
                                     st.success("Anagrafica aggiornata!")
@@ -401,7 +478,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
                             diff_jump = j1 - j2
                             st.number_input("Differenziale (Jump 1 - Jump 2)", value=float(diff_jump), disabled=True, key=f"diff_{atleta_id_scelto}")
 
-                            # DISABILITATO PER VIEWER
                             if st.button("Salva Rilevazione", type="primary", disabled=not is_admin):
                                 db.aggiungi_antropometria(
                                     atleta_id_scelto, data_ril, alt, peso, 
@@ -426,7 +502,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
                                 )
 
                     st.markdown("<br>", unsafe_allow_html=True)
-                    # DISABILITATO PER VIEWER
                     if st.button("❌ Elimina Atleta", type="primary", disabled=not is_admin):
                         db.elimina_atleta(atleta_id_scelto)
                         st.session_state.pop("select_atleta_attivo", None)
@@ -434,3 +509,144 @@ elif st.session_state.active_tab == "Rosa Atleti":
                         st.rerun()
         else:
             st.info("Nessun atleta presente in questa squadra.")
+
+# --- TAB REPORTISTICA ---
+elif st.session_state.active_tab == "Reportistica":
+    st.header("📊 Generatore di Report Personalizzati")
+    
+    tipo_report = st.selectbox(
+        "Seleziona la tipologia di dati da estrarre:",
+        ["Atleti & Anagrafica", "Rilevazioni Antropometriche / Salti"]
+    )
+    
+    st.divider()
+
+    # --- REPORT ATLETI E ANAGRAFICA ---
+    if tipo_report == "Atleti & Anagrafica":
+        st.subheader("Filtri e Selezione Campi - Atleti")
+        
+        if hasattr(db, 'ottieni_tutti_atleti_completi'):
+            dati_raw = db.ottieni_tutti_atleti_completi() 
+            
+            if dati_raw:
+                df_full = pd.DataFrame(dati_raw, columns=[
+                    "ID Atleta", "Nome", "Cognome", "Ruolo", "N° Maglia", "Squadra", "Categoria",
+                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", 
+                    "CAP", "Nazionalità", "Scadenza Visita"
+                ])
+                
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    squadre_filter = st.multiselect("Filtra per Squadra:", options=df_full["Squadra"].dropna().unique().tolist())
+                with col_f2:
+                    ruoli_filter = st.multiselect("Filtra per Ruolo:", options=df_full["Ruolo"].dropna().unique().tolist())
+                
+                df_filtrato = df_full.copy()
+                if squadre_filter:
+                    df_filtrato = df_filtrato[df_filtrato["Squadra"].isin(squadre_filter)]
+                if ruoli_filter:
+                    df_filtrato = df_filtrato[df_filtrato["Ruolo"].isin(ruoli_filter)]
+                    
+                colonne_disponibili = df_full.columns.tolist()
+                colonne_scelte = st.multiselect(
+                    "Seleziona le colonne da includere nel Report:",
+                    options=colonne_disponibili,
+                    default=["N° Maglia", "Cognome", "Nome", "Ruolo", "Squadra", "Scadenza Visita"]
+                )
+                
+                if colonne_scelte:
+                    df_export = df_filtrato[colonne_scelte]
+                    st.subheader("Anteprima Report")
+                    st.dataframe(df_export, use_container_width=True)
+                    
+                    # Download dei dati: 3 Colonne (CSV, Excel, PDF)
+                    col_d1, col_d2, col_d3 = st.columns(3)
+                    with col_d1:
+                        csv_data = df_export.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📥 Scarica in CSV",
+                            data=csv_data,
+                            file_name="report_atleti.csv",
+                            mime="text/csv"
+                        )
+                    with col_d2:
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                            df_export.to_excel(writer, index=False, sheet_name='Atleti')
+                        excel_data = output.getvalue()
+                        
+                        st.download_button(
+                            label="📊 Scarica in Excel (.xlsx)",
+                            data=excel_data,
+                            file_name="report_atleti.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    with col_d3:
+                        pdf_bytes = genera_pdf_report(df_export, titolo="Report Anagrafica Atleti")
+                        st.download_button(
+                            label="📄 Scarica in PDF",
+                            data=pdf_bytes,
+                            file_name="report_atleti.pdf",
+                            mime="application/pdf"
+                        )
+                else:
+                    st.warning("Seleziona almeno una colonna da esportare.")
+            else:
+                st.info("Nessun dato atleta trovato.")
+        else:
+            st.error("⚠️ Funzione `ottieni_tutti_atleti_completi` mancante in database.py")
+
+    # --- REPORT ANTROPOMETRIA E SALTI ---
+    elif tipo_report == "Rilevazioni Antropometriche / Salti":
+        st.subheader("Filtri e Selezione Campi - Antropometria & Salti")
+        
+        if hasattr(db, 'ottieni_tutte_antropometrie_complete'):
+            dati_ant = db.ottieni_tutte_antropometrie_complete()
+            
+            if dati_ant:
+                df_ant = pd.DataFrame(dati_ant, columns=[
+                    "ID", "Cognome", "Nome", "Squadra", "Data Rilevazione", 
+                    "Altezza (cm)", "Peso (kg)", "Reach Attacco", "Vertec Attacco", 
+                    "Jump Attacco", "Reach Muro", "Vertec Muro", "Jump Muro"
+                ])
+                df_ant["Elevazione Attacco (cm)"] = df_ant["Vertec Attacco"] - df_ant["Reach Attacco"]
+                
+                colonne_scelte_ant = st.multiselect(
+                    "Seleziona le colonne da includere:",
+                    options=df_ant.columns.tolist(),
+                    default=["Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza (cm)", "Jump Attacco", "Jump Muro"]
+                )
+                
+                if colonne_scelte_ant:
+                    df_export_ant = df_ant[colonne_scelte_ant]
+                    st.subheader("Anteprima Report")
+                    st.dataframe(df_export_ant, use_container_width=True)
+                    
+                    # Download dei dati: 2 Colonne (Excel, PDF)
+                    col_d1, col_d2 = st.columns(2)
+                    with col_d1:
+                        output_ant = io.BytesIO()
+                        with pd.ExcelWriter(output_ant, engine='openpyxl') as writer:
+                            df_export_ant.to_excel(writer, index=False, sheet_name='Antropometria')
+                        excel_data_ant = output_ant.getvalue()
+                        
+                        st.download_button(
+                            label="📊 Scarica in Excel (.xlsx)",
+                            data=excel_data_ant,
+                            file_name="report_antropometria.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    with col_d2:
+                        pdf_bytes_ant = genera_pdf_report(df_export_ant, titolo="Report Rilevazioni Antropometriche")
+                        st.download_button(
+                            label="📄 Scarica in PDF",
+                            data=pdf_bytes_ant,
+                            file_name="report_antropometria.pdf",
+                            mime="application/pdf"
+                        )
+                else:
+                    st.warning("Seleziona almeno una colonna da esportare.")
+            else:
+                st.info("Nessun dato antropometrico presente.")
+        else:
+            st.error("⚠️ Funzione `ottieni_tutte_antropometrie_complete` mancante in database.py")
