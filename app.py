@@ -510,143 +510,154 @@ elif st.session_state.active_tab == "Rosa Atleti":
         else:
             st.info("Nessun atleta presente in questa squadra.")
 
-# --- TAB REPORTISTICA ---
-elif st.session_state.active_tab == "Reportistica":
-    st.header("📊 Generatore di Report Personalizzati")
-    
-    tipo_report = st.selectbox(
-        "Seleziona la tipologia di dati da estrarre:",
-        ["Atleti & Anagrafica", "Rilevazioni Antropometriche / Salti"]
-    )
-    
-    st.divider()
+st.title("📊 Generatore di Report Personalizzati")
 
-    # --- REPORT ATLETI E ANAGRAFICA ---
-    if tipo_report == "Atleti & Anagrafica":
-        st.subheader("Filtri e Selezione Campi - Atleti")
-        
-        if hasattr(db, 'ottieni_tutti_atleti_completi'):
-            dati_raw = db.ottieni_tutti_atleti_completi() 
-            
-            if dati_raw:
-                df_full = pd.DataFrame(dati_raw, columns=[
-                    "ID Atleta", "Nome", "Cognome", "Ruolo", "N° Maglia", "Squadra", "Categoria",
-                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", 
-                    "CAP", "Nazionalità", "Scadenza Visita"
-                ])
-                
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    squadre_filter = st.multiselect("Filtra per Squadra:", options=df_full["Squadra"].dropna().unique().tolist())
-                with col_f2:
-                    ruoli_filter = st.multiselect("Filtra per Ruolo:", options=df_full["Ruolo"].dropna().unique().tolist())
-                
-                df_filtrato = df_full.copy()
-                if squadre_filter:
-                    df_filtrato = df_filtrato[df_filtrato["Squadra"].isin(squadre_filter)]
-                if ruoli_filter:
-                    df_filtrato = df_filtrato[df_filtrato["Ruolo"].isin(ruoli_filter)]
-                    
-                colonne_disponibili = df_full.columns.tolist()
-                colonne_scelte = st.multiselect(
-                    "Seleziona le colonne da includere nel Report:",
-                    options=colonne_disponibili,
-                    default=["N° Maglia", "Cognome", "Nome", "Ruolo", "Squadra", "Scadenza Visita"]
-                )
-                
-                if colonne_scelte:
-                    df_export = df_filtrato[colonne_scelte]
-                    st.subheader("Anteprima Report")
-                    st.dataframe(df_export, use_container_width=True)
-                    
-                    # Download dei dati: 3 Colonne (CSV, Excel, PDF)
-                    col_d1, col_d2, col_d3 = st.columns(3)
-                    with col_d1:
-                        csv_data = df_export.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="📥 Scarica in CSV",
-                            data=csv_data,
-                            file_name="report_atleti.csv",
-                            mime="text/csv"
-                        )
-                    with col_d2:
-                        output = io.BytesIO()
-                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                            df_export.to_excel(writer, index=False, sheet_name='Atleti')
-                        excel_data = output.getvalue()
-                        
-                        st.download_button(
-                            label="📊 Scarica in Excel (.xlsx)",
-                            data=excel_data,
-                            file_name="report_atleti.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    with col_d3:
-                        pdf_bytes = genera_pdf_report(df_export, titolo="Report Anagrafica Atleti")
-                        st.download_button(
-                            label="📄 Scarica in PDF",
-                            data=pdf_bytes,
-                            file_name="report_atleti.pdf",
-                            mime="application/pdf"
-                        )
-                else:
-                    st.warning("Seleziona almeno una colonna da esportare.")
-            else:
-                st.info("Nessun dato atleta trovato.")
-        else:
-            st.error("⚠️ Funzione `ottieni_tutti_atleti_completi` mancante in database.py")
+# 1. Selezione della Tipologia di Report principale
+tipo_report = st.selectbox(
+    "Seleziona la tipologia di dati da estrarre:",
+    ["Atleti & Anagrafica", "Antropometria & Salti", "Report Integrato Completo"]
+)
 
-    # --- REPORT ANTROPOMETRIA E SALTI ---
-    elif tipo_report == "Rilevazioni Antropometriche / Salti":
-        st.subheader("Filtri e Selezione Campi - Antropometria & Salti")
+st.markdown("---")
+st.subheader("⚙️ Personalizza le colonne da includere nel Report")
+
+df_esportazione = pd.DataFrame()
+
+# ---------------------------------------------------------
+# CASO 1: ATLETI & ANAGRAFICA
+# ---------------------------------------------------------
+if tipo_report == "Atleti & Anagrafica":
+    dati_atleti = db.ottieni_tutti_atleti_completi()
+    
+    if dati_atleti:
+        # Columns originali dal DB Supabase
+        # id, nome, cognome, ruolo, numero, squadra, categoria, dn, ln, cf, ind, cit, cap, naz, vis
+        cols = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
+                "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita"]
+        df_full = pd.DataFrame(dati_atleti, columns=cols)
         
-        if hasattr(db, 'ottieni_tutte_antropometrie_complete'):
-            dati_ant = db.ottieni_tutte_antropometrie_complete()
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("**Info Squadra & Ruolo**")
+            inc_squadra = st.checkbox("Squadra & Categoria", value=True)
+            inc_ruolo = st.checkbox("Ruolo & Numero Maglia", value=True)
             
-            if dati_ant:
-                df_ant = pd.DataFrame(dati_ant, columns=[
-                    "ID", "Cognome", "Nome", "Squadra", "Data Rilevazione", 
-                    "Altezza (cm)", "Peso (kg)", "Reach Attacco", "Vertec Attacco", 
-                    "Jump Attacco", "Reach Muro", "Vertec Muro", "Jump Muro"
-                ])
-                df_ant["Elevazione Attacco (cm)"] = df_ant["Vertec Attacco"] - df_ant["Reach Attacco"]
-                
-                colonne_scelte_ant = st.multiselect(
-                    "Seleziona le colonne da includere:",
-                    options=df_ant.columns.tolist(),
-                    default=["Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza (cm)", "Jump Attacco", "Jump Muro"]
-                )
-                
-                if colonne_scelte_ant:
-                    df_export_ant = df_ant[colonne_scelte_ant]
-                    st.subheader("Anteprima Report")
-                    st.dataframe(df_export_ant, use_container_width=True)
-                    
-                    # Download dei dati: 2 Colonne (Excel, PDF)
-                    col_d1, col_d2 = st.columns(2)
-                    with col_d1:
-                        output_ant = io.BytesIO()
-                        with pd.ExcelWriter(output_ant, engine='openpyxl') as writer:
-                            df_export_ant.to_excel(writer, index=False, sheet_name='Antropometria')
-                        excel_data_ant = output_ant.getvalue()
-                        
-                        st.download_button(
-                            label="📊 Scarica in Excel (.xlsx)",
-                            data=excel_data_ant,
-                            file_name="report_antropometria.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    with col_d2:
-                        pdf_bytes_ant = genera_pdf_report(df_export_ant, titolo="Report Rilevazioni Antropometriche")
-                        st.download_button(
-                            label="📄 Scarica in PDF",
-                            data=pdf_bytes_ant,
-                            file_name="report_antropometria.pdf",
-                            mime="application/pdf"
-                        )
-                else:
-                    st.warning("Seleziona almeno una colonna da esportare.")
-            else:
-                st.info("Nessun dato antropometrico presente.")
+        with col2:
+            st.markdown("**Dati Anagrafici Base**")
+            inc_nascita = st.checkbox("Data e Luogo di Nascita", value=True)
+            inc_cf = st.checkbox("Codice Fiscale", value=True)
+            inc_naz = st.checkbox("Nazionalità", value=False)
+            
+        with col3:
+            st.markdown("**Contatti & Sanità**")
+            inc_indirizzo = st.checkbox("Indirizzo, Città e CAP", value=False)
+            inc_visita = st.checkbox("Scadenza Visita Medica", value=True)
+            
+        # Selezione dinamica delle colonne
+        colonne_scelte = ["Nome", "Cognome"]
+        if inc_squadra: colonne_scelte.extend(["Squadra", "Categoria"])
+        if inc_ruolo: colonne_scelte.extend(["Ruolo", "Numero"])
+        if inc_nascita: colonne_scelte.extend(["Data Nascita", "Luogo Nascita"])
+        if inc_cf: colonne_scelte.append("Codice Fiscale")
+        if inc_naz: colonne_scelte.append("Nazionalità")
+        if inc_indirizzo: colonne_scelte.extend(["Indirizzo", "Città", "CAP"])
+        if inc_visita: colonne_scelte.append("Scadenza Visita")
+        
+        df_esportazione = df_full[colonne_scelte]
+    else:
+        st.info("Nessun atleta presente nel database.")
+
+# ---------------------------------------------------------
+# CASO 2: ANTROPOMETRIA & SALTI
+# ---------------------------------------------------------
+elif tipo_report == "Antropometria & Salti":
+    dati_antropometria = db.ottieni_tutte_antropometrie_complete()
+    
+    if dati_antropometria:
+        cols = ["ID", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
+                "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
+                "Reach Muro", "Vertec Muro", "Jump Muro"]
+        df_full = pd.DataFrame(dati_antropometria, columns=cols)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Misure Corporee**")
+            inc_struttura = st.checkbox("Altezza e Peso", value=True)
+            inc_data_ant = st.checkbox("Data Rilevazione", value=True)
+            
+        with col2:
+            st.markdown("**Test di Salto**")
+            inc_attacco = st.checkbox("Salti in Attacco (Reach, Vertec, Jump)", value=True)
+            inc_muro = st.checkbox("Salti a Muro (Reach, Vertec, Jump)", value=True)
+            
+        colonne_scelte = ["Cognome", "Nome", "Squadra"]
+        if inc_data_ant: colonne_scelte.append("Data Rilevazione")
+        if inc_struttura: colonne_scelte.extend(["Altezza", "Peso"])
+        if inc_attacco: colonne_scelte.extend(["Reach Attacco", "Vertec Attacco", "Jump Attacco"])
+        if inc_muro: colonne_scelte.extend(["Reach Muro", "Vertec Muro", "Jump Muro"])
+        
+        df_esportazione = df_full[colonne_scelte]
+    else:
+        st.info("Nessuna rilevazione antropometrica presente.")
+
+# ---------------------------------------------------------
+# CASO 3: REPORT INTEGRATO COMPLETO
+# ---------------------------------------------------------
+else:
+    dati_atleti = db.ottieni_tutti_atleti_completi()
+    dati_antropometria = db.ottieni_tutte_antropometrie_complete()
+    
+    if dati_atleti:
+        df_atl = pd.DataFrame(dati_atleti, columns=["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
+                                                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita"])
+        if dati_antropometria:
+            df_ant = pd.DataFrame(dati_antropometria, columns=["ID_Ant", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
+                                                               "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
+                                                               "Reach Muro", "Vertec Muro", "Jump Muro"])
+            # Unisci i dati dell'atleta con l'ultima antropometria
+            df_merged = pd.merge(df_atl, df_ant, on=["Cognome", "Nome", "Squadra"], how="left")
         else:
-            st.error("⚠️ Funzione `ottieni_tutte_antropometrie_complete` mancante in database.py")
+            df_merged = df_atl
+            
+        st.markdown("**Seleziona i blocchi di dati da includere:**")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            inc_anag = st.checkbox("Dati Anagrafici", value=True)
+        with c2:
+            inc_squadra_full = st.checkbox("Squadra & Ruolo", value=True)
+        with c3:
+            inc_salti_full = st.checkbox("Dati Antropometrici & Salti", value=True)
+            
+        cols_sel = ["Nome", "Cognome"]
+        if inc_squadra_full: cols_sel.extend(["Squadra", "Categoria", "Ruolo", "Numero"])
+        if inc_anag: cols_sel.extend(["Data Nascita", "Codice Fiscale", "Scadenza Visita"])
+        if inc_salti_full and dati_antropometria: cols_sel.extend(["Altezza", "Peso", "Jump Attacco", "Jump Muro"])
+        
+        df_esportazione = df_merged[cols_sel]
+
+# ---------------------------------------------------------
+# ANTEPRIMA ED ESPORTAZIONE
+# ---------------------------------------------------------
+if not df_esportazione.empty:
+    st.markdown("---")
+    st.subheader("📋 Anteprima del Report Personalizzato")
+    st.dataframe(df_esportazione, use_container_width=True)
+    
+    col_exp1, col_exp2 = st.columns(2)
+    
+    # Download Excel
+    with col_exp1:
+        output_excel = io.BytesIO()
+        with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+            df_esportazione.to_excel(writer, index=False, sheet_name='Report')
+        excel_data = output_excel.getvalue()
+        
+        st.download_button(
+            label="📥 Scarica Report in Excel",
+            data=excel_data,
+            file_name=f"report_{tipo_report.lower().replace(' ', '_')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
