@@ -599,34 +599,31 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Disegna traiettorie e posiziona le pedine direttamente sul campo da pallavolo.")
+            st.caption("Disegna traiettorie, frecce e posiziona le pedine mantenendo i disegni esistenti.")
 
             import streamlit_drawable_canvas as sdc
 
-            # 1. Inizializzazione dello stato degli oggetti nel canvas
+            # 1. Inizializzazione degli oggetti base del campo (se non esistono già)
             if "canvas_objects" not in st.session_state:
-                # Disegniamo le linee del campo come oggetti Fabric.js nativi
                 st.session_state.canvas_objects = [
-                    # Sfondo parquet
                     {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False},
-                    # Perimetro campo
                     {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False},
-                    # Linea di metà campo (Rete)
                     {"type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370, "stroke": "white", "strokeWidth": 4, "selectable": False},
-                    # Linee dei 3 metri
                     {"type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
                     {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
                 ]
 
-            # 2. Controlli per aggiungere le pedine dei ruoli (Semicerchi con Iniziale)
+            # 2. Controlli per aggiungere le pedine senza cancellare i disegni precedenti
             st.write("🎯 **Aggiungi Pedine sul Campo (Semicerchi):**")
             col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7 = st.columns(7)
             
             def aggiungi_pedina_semicerchio(ruolo, colore_sfondo, colore_testo="#FFFFFF"):
-                # Creiamo un gruppo Fabric composto dal semicerchio + testo dell'iniziale
-                # Path SVG per un semicerchio: partenza (0,25), linea orizzontale fino a (50,25), arco fino a (0,25)
+                # Se l'utente ha fatto disegni o spostamenti, salviamo prima lo stato attuale!
+                if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data is not None:
+                    if "objects" in st.session_state.last_canvas_data:
+                        st.session_state.canvas_objects = st.session_state.last_canvas_data["objects"]
+
                 semicircle_path = "M 0 25 L 50 25 A 25 25 0 0 0 0 25 Z"
-                
                 pedina_group = {
                     "type": "group",
                     "left": 275,
@@ -659,6 +656,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     "selectable": True
                 }
                 st.session_state.canvas_objects.append(pedina_group)
+                st.rerun()
 
             if col_p1.button("➕ **A** (Alzatore)"):
                 aggiungi_pedina_semicerchio("A", "#1E90FF")
@@ -680,14 +678,17 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     {"type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
                     {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
                 ]
+                st.session_state.last_canvas_data = None
                 st.rerun()
-            # 3. Selezione strumenti di disegno
+
+            # 3. Selezione strumenti di disegno (inclusa la modalità Freccia)
             col_tools, col_space = st.columns([3, 1])
             with col_tools:
                 strumenti_map = {
                     "Sposta / Trascina pedine": "transform",
                     "Disegna Traiettoria (Mano libera)": "freedraw",
-                    "Linea Retta (Attacco/Passaggio)": "line",
+                    "Freccia (Spostamento/Palla)": "arrow",
+                    "Linea Retta": "line",
                     "Cerchio / Pallone": "circle",
                     "Rettangolo / Zona": "rect"
                 }
@@ -703,7 +704,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
-                # Creazione dello stato iniziale in formato JSON
                 initial_json = {"objects": st.session_state.canvas_objects}
 
                 canvas_result = st_canvas(
@@ -715,8 +715,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     width=600,
                     drawing_mode=drawing_mode,
                     initial_drawing=initial_json,
-                    key="volleyball_canvas_v3"
+                    key="volleyball_canvas_v4"
                 )
+
+                # Salviamo lo stato corrente ad ogni interazione
+                if canvas_result and canvas_result.json_data:
+                    st.session_state.last_canvas_data = canvas_result.json_data
 
             with col_info_ex:
                 st.subheader("💾 Salva in Archivio Esercizi")
@@ -737,6 +741,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
+
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
