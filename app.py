@@ -511,7 +511,7 @@ elif st.session_state.active_tab == "Rosa Atleti":
             st.info("Nessun atleta presente in questa squadra.")
 
 st.title("📊 Generatore di Report Personalizzati")
-st.write("Seleziona esattamente i singoli campi che desideri includere nel tuo report personalizzato.")
+st.write("Seleziona esattamente i singoli campi che desideri includere nel tuo report personalizzato ed esportali in Excel o PDF.")
 
 # 1. Recupero dati da Supabase
 dati_atleti = db.ottieni_tutti_atleti_completi()
@@ -528,7 +528,12 @@ if dati_atleti:
                     "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
                     "Reach Muro", "Vertec Muro", "Jump Muro"]
         df_ant = pd.DataFrame(dati_antropometria, columns=cols_ant)
-        # Unione dei dati anagrafici con le misurazioni antropometriche
+        
+        # Calcolo dei Differenziali
+        df_ant["Diff. Attacco"] = pd.to_numeric(df_ant["Jump Attacco"], errors='coerce') - pd.to_numeric(df_ant["Reach Attacco"], errors='coerce')
+        df_ant["Diff. Muro"] = pd.to_numeric(df_ant["Jump Muro"], errors='coerce') - pd.to_numeric(df_ant["Reach Muro"], errors='coerce')
+        
+        # Unione dati anagrafici e antropometrici
         df_merged = pd.merge(df_atl, df_ant, on=["Cognome", "Nome", "Squadra"], how="left")
     else:
         df_merged = df_atl
@@ -566,13 +571,14 @@ if dati_atleti:
         inc_peso = st.checkbox("Peso (kg)", value=True)
         inc_r_att = st.checkbox("Reach Attacco", value=False)
         inc_v_att = st.checkbox("Vertec Attacco", value=False)
-        inc_j_att = st.checkbox("Jump Attacco (Elevazione)", value=True)
+        inc_j_att = st.checkbox("Jump Attacco", value=True)
+        inc_d_att = st.checkbox("Diff. Attacco (Elevazione)", value=True)
         inc_r_mur = st.checkbox("Reach Muro", value=False)
         inc_v_mur = st.checkbox("Vertec Muro", value=False)
-        inc_j_mur = st.checkbox("Jump Muro (Elevazione)", value=True)
+        inc_j_mur = st.checkbox("Jump Muro", value=True)
+        inc_d_mur = st.checkbox("Diff. Muro (Elevazione)", value=True)
 
     # 3. Costruzione dinamica della lista colonne
-    # Nome e Cognome sempre inclusi come identificativo
     colonne_selezionate = ["Cognome", "Nome"]
 
     # Squadra & Ruolo
@@ -593,7 +599,7 @@ if dati_atleti:
     if inc_cit: colonne_selezionate.append("Città")
     if inc_cap: colonne_selezionate.append("CAP")
 
-    # Antropometria & Salti (se presenti)
+    # Antropometria & Salti
     if dati_antropometria:
         if inc_data_ant: colonne_selezionate.append("Data Rilevazione")
         if inc_alt: colonne_selezionate.append("Altezza")
@@ -601,29 +607,130 @@ if dati_atleti:
         if inc_r_att: colonne_selezionate.append("Reach Attacco")
         if inc_v_att: colonne_selezionate.append("Vertec Attacco")
         if inc_j_att: colonne_selezionate.append("Jump Attacco")
+        if inc_d_att: colonne_selezionate.append("Diff. Attacco")
         if inc_r_mur: colonne_selezionate.append("Reach Muro")
         if inc_v_mur: colonne_selezionate.append("Vertec Muro")
         if inc_j_mur: colonne_selezionate.append("Jump Muro")
+        if inc_d_mur: colonne_selezionate.append("Diff. Muro")
 
     # 4. Filtraggio dati ed Anteprima
-    df_report = df_merged[colonne_selezionate]
+    df_report = df_merged[colonne_selezionate].fillna("-")
 
     st.markdown("---")
     st.subheader(f"📋 Anteprima Report ({len(df_report)} atleti)")
     st.dataframe(df_report, use_container_width=True)
 
-    # 5. Esportazione in Excel
-    output_excel = io.BytesIO()
-    with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-        df_report.to_excel(writer, index=False, sheet_name='Report Personalizzato')
-    excel_data = output_excel.getvalue()
+    # 5. Pulsanti di Esportazione (Excel + PDF)
+    col_exp1, col_exp2 = st.columns(2)
 
-    st.download_button(
-        label="📥 Scarica Report Personalizzato (.xlsx)",
-        data=excel_data,
-        file_name="report_personalizzato_pallavolo.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
-    )
+    # --- ESPORTAZIONE EXCEL ---
+    with col_exp1:
+        output_excel = io.BytesIO()
+        with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+            df_report.to_excel(writer, index=False, sheet_name='Report Personalizzato')
+        excel_data = output_excel.getvalue()
+
+        st.download_button(
+            label="📥 Scarica Report Excel (.xlsx)",
+            data=excel_data,
+            file_name="report_personalizzato_pallavolo.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+    # --- ESPORTAZIONE PDF (tramite WeasyPrint) ---
+    with col_exp2:
+        from weasyprint import HTML
+
+        # Costruzione HTML per la tabella PDF
+        html_headers = "".join([f"<th>{col}</th>" for col in df_report.columns])
+        html_rows = ""
+        for _, row in df_report.iterrows():
+            html_rows += "<tr>" + "".join([f"<td>{val}</td>" for val in row]) + "</tr>"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                @page {{
+                    size: A4 landscape;
+                    margin: 12mm;
+                    background-color: #ffffff;
+                }}
+                body {{
+                    font-family: Arial, sans-serif;
+                    font-size: 9pt;
+                    color: #333333;
+                    margin: 0;
+                    padding: 0;
+                }}
+                .header {{
+                    text-align: center;
+                    margin-bottom: 15px;
+                    border-bottom: 2px solid #1e3a8a;
+                    padding-bottom: 8px;
+                }}
+                h1 {{
+                    color: #1e3a8a;
+                    font-size: 16pt;
+                    margin: 0 0 5px 0;
+                }}
+                .meta {{
+                    font-size: 8pt;
+                    color: #666666;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 10px;
+                }}
+                th {{
+                    background-color: #1e3a8a;
+                    color: #ffffff;
+                    font-weight: bold;
+                    padding: 6px 8px;
+                    text-align: left;
+                    font-size: 8.5pt;
+                    border: 1px solid #1e3a8a;
+                }}
+                td {{
+                    padding: 5px 8px;
+                    border: 1px solid #e2e8f0;
+                    font-size: 8pt;
+                }}
+                tr:nth-child(even) {{
+                    background-color: #f8fafc;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Report Personalizzato Pallavolo</h1>
+                <div class="meta">Data generazione: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Totale atleti: {len(df_report)}</div>
+            </div>
+            <table>
+                <thead>
+                    <tr>{html_headers}</tr>
+                </thead>
+                <tbody>
+                    {html_rows}
+                </tbody>
+            </table>
+        </body>
+        </html>
+        """
+
+        pdf_bytes = HTML(string=html_content).write_pdf()
+
+        st.download_button(
+            label="📄 Scarica Report PDF (.pdf)",
+            data=pdf_bytes,
+            file_name="report_personalizzato_pallavolo.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+
 else:
     st.info("Nessun atleta presente nel database per generare il report.")
