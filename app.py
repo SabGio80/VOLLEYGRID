@@ -619,266 +619,182 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     fill_color="rgba(255, 165, 0, 0.3)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_color="#1e3a8a",  # Sfondo Blu Campo
+                    background_color="#D2691E",  # Colore parquet/campo
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
-                    key="volleyball_court_canvas",
+                    key="volleyball_canvas"
                 )
-                st.caption("💡 Suggerimento: Usa 'freeline' per le traiettorie a mano libera o 'line' per i passaggi diretti.")
 
             with col_info_ex:
-                st.subheader("💾 Dati Esercizio")
-                ex_nome = st.text_input("Nome Esercizio", value="Battuta e Attacco Palla Scontata")
-                ex_fase = st.selectbox("Fase di Gioco", ["WARMUP", "TECNICA", "SISTEMA / 6vs6", "FINALE"])
-                ex_durata = st.number_input("Durata (minuti)", min_value=1, max_value=120, value=20)
-                ex_desc = st.text_area("Descrizione & Regole del Punteggio", value="Servizio da zona 1/6. La ricezione deve attaccare solo palla alta in Z4...")
+                st.subheader("💾 Salva in Archivio Esercizi")
+                ex_nome = st.text_input("Nome Esercizio", key="ex_nome_input", disabled=not is_admin)
+                ex_fase = st.selectbox("Fase di Gioco", ["WARMUP", "TECNICA", "SISTEMA", "SITUAZIONALE", "DEFENSE/MURO", "GLOBAL"], key="ex_fase_input", disabled=not is_admin)
+                ex_durata = st.number_input("Durata Stimata (min)", min_value=5, max_value=120, value=20, step=5, key="ex_durata_input", disabled=not is_admin)
+                ex_desc = st.text_area("Descrizione / Regole / Obiettivi", key="ex_desc_input", disabled=not is_admin)
 
-                if st.button("💾 Salva Esercizio in Archivio", type="primary", disabled=not is_admin):
-                    st.session_state.archivio_esercizi.append({
-                        "nome": ex_nome,
-                        "fase": ex_fase,
-                        "durata": ex_durata,
-                        "descrizione": ex_desc
-                    })
-                    st.success(f"Esercizio '{ex_nome}' salvato! Ora puoi selezionarlo direttamente nelle sedute.")
+                if st.button("💾 Salva Schema & Esercizio", type="primary", disabled=not is_admin):
+                    if ex_nome:
+                        st.session_state.archivio_esercizi.append({
+                            "nome": ex_nome,
+                            "fase": ex_fase,
+                            "durata": ex_durata,
+                            "descrizione": ex_desc,
+                            "canvas_data": canvas_result.json_data if canvas_result else None
+                        })
+                        st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
+                    else:
+                        st.warning("Inserisci il nome dell'esercizio.")
 
-            # Mostra Archivio Esercizi Salvati
+            st.divider()
+            st.subheader("📚 Archivio Esercizi Tattici Creati")
             if st.session_state.archivio_esercizi:
-                st.divider()
-                st.subheader("📚 Archivio Esercizi Creati")
-                df_arch = pd.DataFrame(st.session_state.archivio_esercizi)
+                df_arch = pd.DataFrame(st.session_state.archivio_esercizi)[["nome", "fase", "durata", "descrizione"]]
                 st.dataframe(df_arch, use_container_width=True)
+            else:
+                st.info("Nessun esercizio presente nell'archivio locale.")
 
 # ==========================================
-# --- TAB 4: REPORTISTICA ---
+# --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
 elif st.session_state.active_tab == "Reportistica":
-    st.title("📊 Generatore di Report Personalizzati")
-    st.write("Seleziona i campi e le righe da includere, verifica l'anteprima in tempo reale e scarica il report in Excel o PDF.")
+    st.title("📊 Reportistica & Esportazione Documenti PDF")
 
-    dati_atleti = db.ottieni_tutti_atleti_completi()
-    dati_antropometria = db.ottieni_tutte_antropometrie_complete()
+    if not squadra_id:
+        st.info("Seleziona una squadra in alto per poter generare i report.")
+    else:
+        st.markdown("Genera e scarica i report PDF ufficiali della rosa completa o delle sedute di allenamento programmate.")
 
-    if dati_atleti:
-        cols_atl = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
-                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita", "Telefono", "Email"]
-        
-        df_atl = pd.DataFrame(dati_atleti)
-        if df_atl.shape[1] == len(cols_atl):
-            df_atl.columns = cols_atl
-        else:
-            cols_fallback = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
-                             "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita"]
-            df_atl = df_atl.iloc[:, :len(cols_fallback)]
-            df_atl.columns = cols_fallback
-            df_atl["Telefono"] = "-"
-            df_atl["Email"] = "-"
+        tab_rep_atleti, tab_rep_allenamento = st.tabs(["📄 Report Rosa Atleti", "📄 Report Sedute Allenamento"])
 
-        if dati_antropometria:
-            cols_ant = ["ID_Ant", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
-                        "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
-                        "Reach Muro", "Vertec Muro", "Jump Muro"]
-            df_ant = pd.DataFrame(dati_antropometria, columns=cols_ant)
-            df_ant["Diff. Salti (Att. - Muro)"] = pd.to_numeric(df_ant["Jump Attacco"], errors='coerce') - pd.to_numeric(df_ant["Jump Muro"], errors='coerce')
-            df_merged = pd.merge(df_atl, df_ant, on=["Cognome", "Nome", "Squadra"], how="left")
-        else:
-            df_merged = df_atl
+        # -------------------------------------------------------------------
+        # REPORT 1: ROSA ATLETI (PDF)
+        # -------------------------------------------------------------------
+        with tab_rep_atleti:
+            st.subheader("Stampa Scheda Rosa Squadra")
+            
+            atleti_rep = db.ottieni_atleti_per_squadra(squadra_id)
+            if atleti_rep:
+                df_rep_atleti = pd.DataFrame(atleti_rep, columns=["N° Maglia", "Cognome", "Nome", "Ruolo", "ID Database", "Foto"])
+                st.dataframe(df_rep_atleti[["N° Maglia", "Cognome", "Nome", "Ruolo"]], use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-        
-        col_tit1, col_tit2 = st.columns([2, 1])
-        with col_tit1:
-            report_title = st.text_input("🏷️ Inserisci il Titolo del Report", value="Report Personalizzato Atleti")
-        
-        safe_title = "".join([c if c.isalnum() else "_" for c in report_title]).strip("_").lower()
-        if not safe_title:
-            safe_title = "report_pallavolo"
+                if st.button("🖨️ Genera Report PDF Rosa", type="primary"):
+                    buffer = io.BytesIO()
+                    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+                    elements = []
 
-        st.markdown("---")
+                    styles = getSampleStyleSheet()
+                    title_style = ParagraphStyle(name="TitleStyle", fontName="Helvetica-Bold", fontSize=18, leading=22, alignment=1, spaceAfter=20)
+                    header_style = ParagraphStyle(name="HeaderStyle", fontName="Helvetica-Bold", fontSize=12, leading=14)
+                    cell_style = ParagraphStyle(name="CellStyle", fontName="Helvetica", fontSize=10, leading=12)
 
-        col1, col2, col3, col4 = st.columns(4)
+                    elements.append(Paragraph(f"ROSA SQUADRA: {squadra_scelta}", title_style))
+                    elements.append(Paragraph(f"Stagione Agonistica: {stagione_scelta}", styles["SubTitle"]))
+                    elements.append(Spacer(1, 15))
 
-        with col1:
-            st.markdown("### 🏐 Squadra & Ruolo")
-            inc_squadra = st.checkbox("Squadra", value=True)
-            inc_categoria = st.checkbox("Categoria", value=True)
-            inc_ruolo = st.checkbox("Ruolo", value=True)
-            inc_numero = st.checkbox("Numero Maglia", value=True)
+                    data_table = [["N°", "Cognome", "Nome", "Ruolo"]]
+                    for a in atleti_rep:
+                        data_table.append([
+                            Paragraph(str(a[0]), cell_style),
+                            Paragraph(str(a[1]), cell_style),
+                            Paragraph(str(a[2]), cell_style),
+                            Paragraph(str(a[3]), cell_style)
+                        ])
 
-        with col2:
-            st.markdown("### 👤 Dati Anagrafici")
-            inc_dn = st.checkbox("Data di Nascita", value=False)
-            inc_ln = st.checkbox("Luogo di Nascita", value=False)
-            inc_cf = st.checkbox("Codice Fiscale", value=False)
-            inc_naz = st.checkbox("Nazionalità", value=False)
-            inc_visita = st.checkbox("Scadenza Visita Medica", value=True)
+                    table = Table(data_table, colWidths=[40, 160, 160, 140])
+                    table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 11),
+                        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F3F4F6")),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
+                    ]))
 
-        with col3:
-            st.markdown("### 🏠 Contatti")
-            inc_email = st.checkbox("Email", value=False)
-            inc_tel = st.checkbox("Telefono / Cellulare", value=True)
-            inc_ind = st.checkbox("Indirizzo", value=False)
-            inc_cit = st.checkbox("Città", value=False)
-            inc_cap = st.checkbox("CAP", value=False)
+                    elements.append(table)
+                    doc.build(elements)
+                    buffer.seek(0)
 
-        with col4:
-            st.markdown("### 📏 Antropometria & Salti")
-            inc_data_ant = st.checkbox("Data Rilevazione", value=False)
-            inc_alt = st.checkbox("Altezza (cm)", value=True)
-            inc_peso = st.checkbox("Peso (kg)", value=True)
-            inc_r_att = st.checkbox("Reach Attacco", value=False)
-            inc_v_att = st.checkbox("Vertec Attacco", value=False)
-            inc_j_att = st.checkbox("Jump Attacco", value=True)
-            inc_r_mur = st.checkbox("Reach Muro", value=False)
-            inc_v_mur = st.checkbox("Vertec Muro", value=False)
-            inc_j_mur = st.checkbox("Jump Muro", value=True)
-            inc_d_salti = st.checkbox("Diff. Salti (Attacco - Muro)", value=True)
+                    st.download_button(
+                        label="⬇️ Scarica PDF Rosa Squadra",
+                        data=buffer,
+                        file_name=f"Rosa_{squadra_scelta.replace(' ', '_')}.pdf",
+                        mime="application/pdf"
+                    )
+            else:
+                st.warning("Nessun atleta registrato in questa squadra.")
 
-        colonne_selezionate = ["Cognome", "Nome"]
+        # -------------------------------------------------------------------
+        # REPORT 2: SEDUTA ALLENAMENTO (PDF)
+        # -------------------------------------------------------------------
+        with tab_rep_allenamento:
+            st.subheader("Stampa Schede Allenamento")
 
-        if inc_squadra: colonne_selezionate.append("Squadra")
-        if inc_categoria: colonne_selezionate.append("Categoria")
-        if inc_ruolo: colonne_selezionate.append("Ruolo")
-        if inc_numero: colonne_selezionate.append("Numero")
-
-        if inc_dn: colonne_selezionate.append("Data Nascita")
-        if inc_ln: colonne_selezionate.append("Luogo Nascita")
-        if inc_cf: colonne_selezionate.append("Codice Fiscale")
-        if inc_naz: colonne_selezionate.append("Nazionalità")
-        if inc_visita: colonne_selezionate.append("Scadenza Visita")
-
-        if inc_email: colonne_selezionate.append("Email")
-        if inc_tel: colonne_selezionate.append("Telefono")
-        if inc_ind: colonne_selezionate.append("Indirizzo")
-        if inc_cit: colonne_selezionate.append("Città")
-        if inc_cap: colonne_selezionate.append("CAP")
-
-        if dati_antropometria:
-            if inc_data_ant: colonne_selezionate.append("Data Rilevazione")
-            if inc_alt: colonne_selezionate.append("Altezza")
-            if inc_peso: colonne_selezionate.append("Peso")
-            if inc_r_att: colonne_selezionate.append("Reach Attacco")
-            if inc_v_att: colonne_selezionate.append("Vertec Attacco")
-            if inc_j_att: colonne_selezionate.append("Jump Attacco")
-            if inc_r_mur: colonne_selezionate.append("Reach Muro")
-            if inc_v_mur: colonne_selezionate.append("Vertec Muro")
-            if inc_j_mur: colonne_selezionate.append("Jump Muro")
-            if inc_d_salti: colonne_selezionate.append("Diff. Salti (Att. - Muro)")
-
-        df_base = df_merged[colonne_selezionate].fillna("-")
-        df_base.insert(0, "Includi", True)
-
-        st.markdown("---")
-        st.subheader("☑️ Selezione Righe da Includere")
-        st.caption("Spunta o despunta la casella 'Includi' per scegliere quali atleti mostrare nell'anteprima ed esportare.")
-
-        edited_df = st.data_editor(
-            df_base,
-            column_config={
-                "Includi": st.column_config.CheckboxColumn(
-                    "Includi nel Report",
-                    help="Spunta per includere l'atleta nel report",
-                    default=True
-                )
-            },
-            disabled=[c for c in df_base.columns if c != "Includi"],
-            hide_index=True,
-            use_container_width=True,
-            key="editor_righe_report"
-        )
-
-        df_report = edited_df[edited_df["Includi"] == True].drop(columns=["Includi"])
-
-        st.markdown("---")
-        st.subheader(f"📋 Anteprima Finale Report: {report_title} ({len(df_report)} atleti selezionati)")
-        
-        if not df_report.empty:
-            st.dataframe(df_report, use_container_width=True, hide_index=True)
-
-            col_exp1, col_exp2 = st.columns(2)
-
-            with col_exp1:
-                output_excel = io.BytesIO()
-                with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-                    df_report.to_excel(writer, index=False, sheet_name='Report')
-                excel_data = output_excel.getvalue()
-
-                st.download_button(
-                    label="📥 Scarica Report Excel (.xlsx)",
-                    data=excel_data,
-                    file_name=f"{safe_title}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+            if "progr_sedute" in st.session_state and st.session_state.progr_sedute:
+                idx_sed = st.selectbox(
+                    "Seleziona Seduta da esportare in PDF:", 
+                    options=range(len(st.session_state.progr_sedute)),
+                    format_func=lambda i: f"{st.session_state.progr_sedute[i]['Seduta']} ({st.session_state.progr_sedute[i]['Data']})"
                 )
 
-            with col_exp2:
-                pdf_buffer = io.BytesIO()
-                doc = SimpleDocTemplate(
-                    pdf_buffer, 
-                    pagesize=landscape(letter),
-                    rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
-                )
-                elements = []
-                styles = getSampleStyleSheet()
+                seduta_target = st.session_state.progr_sedute[idx_sed]
 
-                title_style = ParagraphStyle(
-                    'ReportTitle',
-                    parent=styles['Heading1'],
-                    fontSize=14,
-                    textColor=colors.HexColor('#1e3a8a'),
-                    alignment=1,
-                    spaceAfter=15
-                )
-                elements.append(Paragraph(report_title, title_style))
+                if st.button("🖨️ Genera Scheda Seduta PDF", type="primary"):
+                    buffer = io.BytesIO()
+                    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+                    elements = []
 
-                cell_style_header = ParagraphStyle(
-                    'HeaderStyle',
-                    parent=styles['Normal'],
-                    fontName='Helvetica-Bold',
-                    fontSize=8,
-                    textColor=colors.whitesmoke,
-                    alignment=1
-                )
+                    styles = getSampleStyleSheet()
+                    t_style = ParagraphStyle(name="TStyle", fontName="Helvetica-Bold", fontSize=18, leading=22, spaceAfter=10)
+                    sub_style = ParagraphStyle(name="SubStyle", fontName="Helvetica-Bold", fontSize=12, leading=15, spaceAfter=5)
+                    body_style = ParagraphStyle(name="BStyle", fontName="Helvetica", fontSize=10, leading=13)
 
-                cell_style_body = ParagraphStyle(
-                    'BodyStyle',
-                    parent=styles['Normal'],
-                    fontName='Helvetica',
-                    fontSize=7,
-                    textColor=colors.black,
-                    alignment=1
-                )
+                    elements.append(Paragraph(f"SCHEDA ALLENAMENTO: {seduta_target['Seduta']}", t_style))
+                    elements.append(Paragraph(f"<b>Data:</b> {seduta_target['Data']} | <b>Ora:</b> {seduta_target.get('Ora Inizio','--')} - {seduta_target.get('Ora Fine','--')}", body_style))
+                    elements.append(Paragraph(f"<b>Palestra:</b> {seduta_target.get('Luogo','')}", body_style))
+                    elements.append(Spacer(1, 10))
 
-                header_row = [Paragraph(str(col), cell_style_header) for col in df_report.columns]
-                data_matrix = [header_row]
+                    elements.append(Paragraph(f"<b>Focus Tecnico:</b> {seduta_target.get('Focus Tecnica','')}", body_style))
+                    elements.append(Paragraph(f"<b>Focus Tattico:</b> {seduta_target.get('Focus Tattica','')}", body_style))
+                    elements.append(Spacer(1, 10))
 
-                for _, row in df_report.iterrows():
-                    row_cells = [Paragraph(str(val), cell_style_body) for val in row]
-                    data_matrix.append(row_cells)
+                    # Sezione Presenze
+                    pres_str = ", ".join(seduta_target.get('Presenti', [])) if seduta_target.get('Presenti') else "Nessuno specificato"
+                    elements.append(Paragraph(f"<b>Atleti Convocati/Presenti:</b> {pres_str}", body_style))
+                    elements.append(Spacer(1, 15))
 
-                num_cols = len(df_report.columns)
-                col_width = (792 - 40) / num_cols if num_cols > 0 else 100
+                    # Tabella Esercizi
+                    elements.append(Paragraph("Dettaglio Fasi ed Esercizi", sub_style))
+                    ex_data = [["Fase", "Esercizio", "Min", "Note"]]
+                    for item in seduta_target.get("Esercizi", []):
+                        ex_data.append([
+                            Paragraph(str(item.get("Fase", "")), body_style),
+                            Paragraph(str(item.get("Esercizio", "")), body_style),
+                            Paragraph(str(item.get("Tempo (min)", "")), body_style),
+                            Paragraph(str(item.get("Note", "")), body_style)
+                        ])
 
-                t = Table(data_matrix, colWidths=[col_width] * num_cols)
-                t.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                    ('TOPPADDING', (0, 0), (-1, -1), 4),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
-                ]))
-                elements.append(t)
-                
-                doc.build(elements)
-                pdf_bytes = pdf_buffer.getvalue()
+                    table_ex = Table(ex_data, colWidths=[80, 180, 40, 200])
+                    table_ex.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0D9488")),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F8FAFC")),
+                    ]))
 
-                st.download_button(
-                    label="📄 Scarica Report PDF (.pdf)",
-                    data=pdf_bytes,
-                    file_name=f"{safe_title}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+                    elements.append(table_ex)
+                    doc.build(elements)
+                    buffer.seek(0)
+
+                    st.download_button(
+                        label="⬇️ Scarica Scheda Seduta (PDF)",
+                        data=buffer,
+                        file_name=f"Seduta_{seduta_target['Seduta'].replace(' ', '_')}.pdf",
+                        mime="application/pdf"
+                    )
+            else:
+                st.info("Nessuna seduta attualmente in programmazione.")
