@@ -594,14 +594,35 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         if is_admin and st.button(f"🗑️ Elimina {seduta['Seduta']}", key=f"del_sed_{idx}"):
                             st.session_state.progr_sedute.pop(idx)
                             st.rerun()
-        # -------------------------------------------------------------------
+
+# -------------------------------------------------------------------
         # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Disegna traiettorie, inserisci frecce e posiziona le pedine mantenendo i disegni esistenti.")
+            st.caption("Disegna traiettorie, frecce e posiziona le pedine mantenendo i disegni esistenti.")
 
             import streamlit_drawable_canvas as sdc
+
+            # CSS Inject per garantire la visibilità costante dei pulsanti di controllo in basso
+            st.markdown(
+                """
+                <style>
+                div[data-testid="stCanvas"] + div button,
+                div[data-testid="stCanvas"] ~ div button,
+                button[title="Undo"], button[title="Redo"], button[title="Trash"], button[title="Download"] {
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    display: inline-block !important;
+                    filter: invert(1) brightness(2) !important; /* Rende le icone nere visibili anche su tema scuro */
+                    background-color: rgba(255, 255, 255, 0.15) !important;
+                    border-radius: 4px !important;
+                    margin: 2px !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
 
             # 1. Inizializzazione degli oggetti base del campo
             if "canvas_objects" not in st.session_state:
@@ -613,15 +634,14 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
                 ]
 
-            # Sincronizza lo stato corrente del canvas prima di aggiungere elementi
             def aggiorna_stato_canvas():
                 if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data is not None:
                     if "objects" in st.session_state.last_canvas_data:
                         st.session_state.canvas_objects = st.session_state.last_canvas_data["objects"]
 
-            # 2. Controlli per aggiungere le pedine e frecce
-            st.write("🎯 **Inserisci Elementi sul Campo:**")
-            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7, col_p8 = st.columns(8)
+            # 2. Pulsanti pedine
+            st.write("🎯 **Inserisci Pedine sul Campo:**")
+            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7 = st.columns(7)
             
             def aggiungi_pedina_semicerchio(ruolo, colore_sfondo, colore_testo="#FFFFFF"):
                 aggiorna_stato_canvas()
@@ -660,25 +680,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 st.session_state.canvas_objects.append(pedina_group)
                 st.rerun()
 
-            def aggiungi_freccia():
-                aggiorna_stato_canvas()
-                # Creiamo una freccia orientabile composta da asticella e punta
-                freccia_group = {
-                    "type": "group",
-                    "left": 260,
-                    "top": 190,
-                    "width": 80,
-                    "height": 20,
-                    "objects": [
-                        {"type": "line", "x1": -40, "y1": 0, "x2": 30, "y2": 0, "stroke": "#FFFF00", "strokeWidth": 4},
-                        {"type": "polygon", "points": [{"x": 30, "y": -8}, {"x": 45, "y": 0}, {"x": 30, "y": 8}], "fill": "#FFFF00"}
-                    ],
-                    "hasControls": True,
-                    "selectable": True
-                }
-                st.session_state.canvas_objects.append(freccia_group)
-                st.rerun()
-
             if col_p1.button("➕ **A** (Alzat.)"):
                 aggiungi_pedina_semicerchio("A", "#1E90FF")
             if col_p2.button("➕ **O** (Oppos.)"):
@@ -691,9 +692,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 aggiungi_pedina_semicerchio("L", "#FFA500")
             if col_p6.button("➕ **T** (Tecni.)"):
                 aggiungi_pedina_semicerchio("T", "#333333")
-            if col_p7.button("➡️ **Freccia**"):
-                aggiungi_freccia()
-            if col_p8.button("🔄 **Reset**"):
+            if col_p7.button("🔄 **Reset**"):
                 st.session_state.canvas_objects = [
                     {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False},
                     {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False},
@@ -704,20 +703,25 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 st.session_state.last_canvas_data = None
                 st.rerun()
 
-            # 3. Selezione strumenti di disegno (modalità valide per st_canvas)
+            # 3. Menu Strumenti (inclusa la Freccia nello stesso menu)
             col_tools, col_space = st.columns([3, 1])
             with col_tools:
                 strumenti_map = {
                     "Sposta / Trascina / Ruota": "transform",
                     "Disegna Traiettoria (Mano libera)": "freedraw",
                     "Linea Retta": "line",
+                    "Freccia Direzionale": "line_arrow",
                     "Cerchio / Pallone": "circle",
                     "Rettangolo / Zona": "rect"
                 }
                 c_t1, c_t2, c_t3 = st.columns(3)
                 with c_t1:
                     strumento_scelto = st.selectbox("Modalità:", list(strumenti_map.keys()), key="draw_mode_label")
-                    drawing_mode = strumenti_map[strumento_scelto]
+                    raw_mode = strumenti_map[strumento_scelto]
+                    
+                    # Se l'utente seleziona "Freccia Direzionale", usiamo la modalità "line" compatibile col componente
+                    drawing_mode = "line" if raw_mode == "line_arrow" else raw_mode
+
                 with c_t2:
                     stroke_color = st.color_picker("Colore tratto:", "#FFFF00", key="stroke_clr")
                 with c_t3:
@@ -726,6 +730,34 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
+                # Se è attiva la modalità freccia, processiamo gli ultimi oggetti linea convertendo le ultime coordinate in punta di freccia
+                if raw_mode == "line_arrow" and "last_canvas_data" in st.session_state and st.session_state.last_canvas_data:
+                    objs = st.session_state.last_canvas_data.get("objects", [])
+                    if objs and objs[-1].get("type") == "line" and not objs[-1].get("is_arrow_processed"):
+                        last_line = objs[-1]
+                        last_line["is_arrow_processed"] = True
+                        
+                        # Calcolo delle coordinate per la punta della freccia
+                        import math
+                        x1, y1 = last_line["x1"], last_line["y1"]
+                        x2, y2 = last_line["x2"], last_line["y2"]
+                        angle = math.atan2(y2 - y1, x2 - x1)
+                        head_len = 15
+                        
+                        p1_x = x2 - head_len * math.cos(angle - math.pi / 6)
+                        p1_y = y2 - head_len * math.sin(angle - math.pi / 6)
+                        p2_x = x2 - head_len * math.cos(angle + math.pi / 6)
+                        p2_y = y2 - head_len * math.sin(angle + math.pi / 6)
+                        
+                        arrow_head = {
+                            "type": "polygon",
+                            "points": [{"x": x2, "y": y2}, {"x": p1_x, "y": p1_y}, {"x": p2_x, "y": p2_y}],
+                            "fill": stroke_color,
+                            "stroke": stroke_color,
+                            "strokeWidth": 1
+                        }
+                        st.session_state.canvas_objects = objs + [arrow_head]
+
                 initial_json = {"objects": st.session_state.canvas_objects}
 
                 canvas_result = st_canvas(
@@ -737,10 +769,9 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     width=600,
                     drawing_mode=drawing_mode,
                     initial_drawing=initial_json,
-                    key="volleyball_canvas_v5"
+                    key="volleyball_canvas_v6"
                 )
 
-                # Salviamo lo stato corrente ad ogni interazione
                 if canvas_result and canvas_result.json_data:
                     st.session_state.last_canvas_data = canvas_result.json_data
 
@@ -763,6 +794,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
+
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
