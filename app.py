@@ -511,7 +511,7 @@ elif st.session_state.active_tab == "Rosa Atleti":
             st.info("Nessun atleta presente in questa squadra.")
 
 st.title("📊 Generatore di Report Personalizzati")
-st.write("Seleziona esattamente i singoli campi che desideri includere nel tuo report personalizzato ed esportali in Excel o PDF.")
+st.write("Seleziona i campi da includere, assegna un titolo personalizzato, verifica l'anteprima e scarica il report in Excel o PDF.")
 
 # 1. Recupero dati da Supabase
 dati_atleti = db.ottieni_tutti_atleti_completi()
@@ -540,7 +540,19 @@ if dati_atleti:
 
     st.markdown("---")
     
-    # 2. Selezione granulare dei campi tramite Checkbox divise per colonne
+    # 2. Input Titolo del Report e generazione del nome file sicuro
+    col_tit1, col_tit2 = st.columns([2, 1])
+    with col_tit1:
+        report_title = st.text_input("🏷️ Inserisci il Titolo del Report", value="Report Personalizzato Atleti")
+    
+    # Generazione automatica del nome file basato sul titolo (rimuove spazi e caratteri speciali)
+    safe_title = "".join([c if c.isalnum() else "_" for c in report_title]).strip("_").lower()
+    if not safe_title:
+        safe_title = "report_pallavolo"
+
+    st.markdown("---")
+
+    # 3. Selezione granulare dei campi tramite Checkbox
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
@@ -578,28 +590,24 @@ if dati_atleti:
         inc_j_mur = st.checkbox("Jump Muro", value=True)
         inc_d_mur = st.checkbox("Diff. Muro (Elevazione)", value=True)
 
-    # 3. Costruzione dinamica della lista colonne
+    # 4. Costruzione dinamica della lista colonne
     colonne_selezionate = ["Cognome", "Nome"]
 
-    # Squadra & Ruolo
     if inc_squadra: colonne_selezionate.append("Squadra")
     if inc_categoria: colonne_selezionate.append("Categoria")
     if inc_ruolo: colonne_selezionate.append("Ruolo")
     if inc_numero: colonne_selezionate.append("Numero")
 
-    # Anagrafica
     if inc_dn: colonne_selezionate.append("Data Nascita")
     if inc_ln: colonne_selezionate.append("Luogo Nascita")
     if inc_cf: colonne_selezionate.append("Codice Fiscale")
     if inc_naz: colonne_selezionate.append("Nazionalità")
     if inc_visita: colonne_selezionate.append("Scadenza Visita")
 
-    # Contatti
     if inc_ind: colonne_selezionate.append("Indirizzo")
     if inc_cit: colonne_selezionate.append("Città")
     if inc_cap: colonne_selezionate.append("CAP")
 
-    # Antropometria & Salti
     if dati_antropometria:
         if inc_data_ant: colonne_selezionate.append("Data Rilevazione")
         if inc_alt: colonne_selezionate.append("Altezza")
@@ -613,27 +621,27 @@ if dati_atleti:
         if inc_j_mur: colonne_selezionate.append("Jump Muro")
         if inc_d_mur: colonne_selezionate.append("Diff. Muro")
 
-    # 4. Filtraggio dati ed Anteprima
+    # 5. Filtraggio dati ed Anteprima in tempo reale
     df_report = df_merged[colonne_selezionate].fillna("-")
 
     st.markdown("---")
-    st.subheader(f"📋 Anteprima Report ({len(df_report)} atleti)")
+    st.subheader(f"📋 Anteprima: {report_title} ({len(df_report)} atleti)")
     st.dataframe(df_report, use_container_width=True)
 
-    # 5. Pulsanti di Esportazione (Excel + PDF)
+    # 6. Pulsanti di Esportazione con nome file dinamico derivato dal titolo
     col_exp1, col_exp2 = st.columns(2)
 
     # --- ESPORTAZIONE EXCEL ---
     with col_exp1:
         output_excel = io.BytesIO()
         with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-            df_report.to_excel(writer, index=False, sheet_name='Report Personalizzato')
+            df_report.to_excel(writer, index=False, sheet_name='Report')
         excel_data = output_excel.getvalue()
 
         st.download_button(
             label="📥 Scarica Report Excel (.xlsx)",
             data=excel_data,
-            file_name="report_personalizzato_pallavolo.xlsx",
+            file_name=f"{safe_title}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -654,23 +662,22 @@ if dati_atleti:
         elements = []
         styles = getSampleStyleSheet()
 
-        # Titolo
+        # Stile del titolo stampato all'interno del documento PDF
         title_style = ParagraphStyle(
             'ReportTitle',
             parent=styles['Heading1'],
-            fontSize=16,
+            fontSize=14,
             textColor=colors.HexColor('#1e3a8a'),
             alignment=1,
             spaceAfter=15
         )
-        elements.append(Paragraph("Report Personalizzato Pallavolo", title_style))
+        elements.append(Paragraph(report_title, title_style))
 
-        # Conversione dati tabella per ReportLab
+        # Conversione dei dati della tabella per la generazione PDF
         data_matrix = [list(df_report.columns)]
         for _, row in df_report.iterrows():
             data_matrix.append([str(val) for val in row])
 
-        # Creo la tabella PDF
         t = Table(data_matrix)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
@@ -691,7 +698,9 @@ if dati_atleti:
         st.download_button(
             label="📄 Scarica Report PDF (.pdf)",
             data=pdf_bytes,
-            file_name="report_personalizzato_pallavolo.pdf",
+            file_name=f"{safe_title}.pdf",
             mime="application/pdf",
             use_container_width=True
         )
+else:
+    st.info("Nessun atleta presente nel database per generare il report.")
