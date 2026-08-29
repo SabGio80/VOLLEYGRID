@@ -599,76 +599,101 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Disegna le traiettorie, i movimenti e i posizionamenti direttamente sul campo da pallavolo e salva l'esercizio nell'archivio.")
+            st.caption("Disegna traiettorie e posiziona le pedine direttamente sul campo da pallavolo.")
 
             import io
             import base64
-            import streamlit.runtime.media_file_manager as mfm
             import streamlit_drawable_canvas as sdc
             from PIL import Image, ImageDraw
 
-            # Funzione per generare l'immagine del campo da pallavolo (PIL Image)
-            def crea_immagine_campo():
+            # 1. Generazione dinamica dello sfondo campo via SVG/Base64 CSS
+            def crea_immagine_campo_b64():
                 w, h = 600, 400
-                img = Image.new("RGB", (w, h), "#D2691E") # Parquet
+                img = Image.new("RGB", (w, h), "#D2691E") # Parquet arancione
                 draw = ImageDraw.Draw(img)
                 
-                m = 30 # Margine perimetrale
-                draw.rectangle([m, m, w - m, h - m], outline="white", width=4) # Campo
+                m = 30 # Margine esteriore (zone di battuta e bordo)
+                # Rettangolo del campo
+                draw.rectangle([m, m, w - m, h - m], outline="white", width=4)
                 
+                # Linea di metà campo / Rete
                 mid_x = w // 2
-                draw.line([(mid_x, m), (mid_x, h - m)], fill="white", width=4) # Rete
-                
-                campo_lunghezza = w - 2 * m
-                dist_3m = campo_lunghezza / 6
+                draw.line([(mid_x, m), (mid_x, h - m)], fill="white", width=4)
                 
                 # Linee dei 3 metri
+                campo_l = w - 2 * m
+                dist_3m = campo_l / 6
                 draw.line([(m + dist_3m * 2, m), (m + dist_3m * 2, h - m)], fill="white", width=2)
                 draw.line([(w - m - dist_3m * 2, m), (w - m - dist_3m * 2, h - m)], fill="white", width=2)
                 
-                return img
-
-            campo_pil = crea_immagine_campo()
-
-            # FIX DEFINITIVO: Patch di st_image.image_to_url per compatibilità con le nuove versioni di Streamlit
-            def custom_image_to_url(image, width, clamp, channels, output_format, image_id):
                 buffered = io.BytesIO()
-                image.save(buffered, format="PNG")
+                img.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
                 return f"data:image/png;base64,{img_str}"
 
-            sdc.st_image.image_to_url = custom_image_to_url
+            campo_b64_url = crea_immagine_campo_b64()
+
+            # 2. Selezione Strumenti e Pedine Ruolo
+            col_tools, col_pedine = st.columns([2, 2])
+            
+            with col_tools:
+                strumenti_map = {
+                    "Mano libera (Traiettorie)": "freedraw",
+                    "Linea retta (Passaggi/Attacchi)": "line",
+                    "Rettangolo (Zone)": "rect",
+                    "Cerchio": "circle",
+                    "Inserisci Testo / Pedina": "text",
+                    "Sposta / Rimodella oggetti": "transform"
+                }
+                
+                c_t1, c_t2, c_t3 = st.columns(3)
+                with c_t1:
+                    strumento_scelto = st.selectbox("Strumento:", list(strumenti_map.keys()), key="draw_mode_label")
+                    drawing_mode = strumenti_map[strumento_scelto]
+                with c_t2:
+                    stroke_color = st.color_picker("Colore elemento:", "#FF0000", key="stroke_clr")
+                with c_t3:
+                    stroke_width = st.slider("Spessore linea:", 1, 10, 3, key="stroke_w")
+
+            with col_pedine:
+                st.write("📌 **Guida Pedine Ruolo (usa lo strumento 'Inserisci Testo / Pedina'):**")
+                st.caption("Fai click sul campo per posizionare le lettere dei ruoli:")
+                c_p1, c_p2, c_p3, c_p4, c_p5, c_p6 = st.columns(6)
+                c_p1.info("**A**: Alzatore")
+                c_p2.info("**O**: Opposto")
+                c_p3.info("**S**: Schiacciatore")
+                c_p4.info("**C**: Centrale")
+                c_p5.info("**L**: Libero")
+                c_p6.warning("**T**: Tecnico")
 
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
-                strumenti_map = {
-                    "Mano libera": "freedraw",
-                    "Linea retta": "line",
-                    "Rettangolo": "rect",
-                    "Cerchio": "circle",
-                    "Sposta/Rimodella": "transform"
-                }
-                
-                c_tool1, c_tool2, c_tool3 = st.columns(3)
-                with c_tool1:
-                    strumento_scelto = st.selectbox("Strumento:", list(strumenti_map.keys()), key="draw_mode_label")
-                    drawing_mode = strumenti_map[strumento_scelto]
-                with c_tool2:
-                    stroke_color = st.color_picker("Colore linea:", "#FF0000", key="stroke_clr")
-                with c_tool3:
-                    stroke_width = st.slider("Spessore linea:", 1, 10, 3, key="stroke_w")
+                # Layout container con sfondo campo in CSS per evitare ogni errore di caricamento
+                st.markdown(
+                    f"""
+                    <style>
+                    div[data-testid="stCanvas"] {{
+                        background-image: url("{campo_b64_url}");
+                        background-size: cover;
+                        background-position: center;
+                        border: 2px solid #333;
+                    }}
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
 
-                # Passiamo direttamente l'oggetto PIL Image
+                # Canvas trasparente sovrapposto al campo
                 canvas_result = st_canvas(
-                    fill_color="rgba(255, 165, 0, 0.3)",
+                    fill_color="rgba(255, 255, 255, 0.2)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_image=campo_pil,
+                    background_color="rgba(0,0,0,0)", # Trasparente per mostrare il campo sottostante
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
-                    key="volleyball_canvas"
+                    key="volleyball_canvas_v2"
                 )
 
             with col_info_ex:
@@ -690,6 +715,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
+
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
