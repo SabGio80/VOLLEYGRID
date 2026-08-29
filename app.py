@@ -75,81 +75,6 @@ def file_to_base64(uploaded_file):
         return f"data:{mime_type};base64,{b64_str}"
     return None
 
-def genera_pdf_report(df, titolo="Report Gestionale Pallavolo"):
-    """Genera un file PDF formattato in formato orizzontale a partire da un DataFrame."""
-    buffer = io.BytesIO()
-    
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=landscape(letter),
-        rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
-    )
-    elements = []
-    
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'TitleStyle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        leading=20,
-        textColor=colors.HexColor('#1E3A8A'),
-        spaceAfter=6
-    )
-    subtitle_style = ParagraphStyle(
-        'SubTitleStyle',
-        parent=styles['Normal'],
-        fontSize=9,
-        textColor=colors.gray,
-        spaceAfter=15
-    )
-    cell_style = ParagraphStyle(
-        'CellStyle',
-        parent=styles['Normal'],
-        fontSize=8,
-        leading=10
-    )
-    header_style = ParagraphStyle(
-        'HeaderStyle',
-        parent=styles['Normal'],
-        fontSize=8,
-        leading=10,
-        textColor=colors.white,
-        fontName='Helvetica-Bold'
-    )
-    
-    elements.append(Paragraph(titolo, title_style))
-    data_ora = datetime.now().strftime("%d/%m/%Y %H:%M")
-    elements.append(Paragraph(f"Generato il: {data_ora}", subtitle_style))
-    
-    headers = [Paragraph(str(col), header_style) for col in df.columns]
-    data_table = [headers]
-    
-    for row in df.itertuples(index=False):
-        row_data = []
-        for val in row:
-            text = "" if pd.isna(val) else str(val)
-            row_data.append(Paragraph(text, cell_style))
-        data_table.append(row_data)
-        
-    t = Table(data_table, repeatRows=1)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-        ('TOPPADDING', (0, 0), (-1, 0), 6),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F4F6')]),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#D1D5DB')),
-        ('TOPPADDING', (0, 1), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-    ]))
-    
-    elements.append(t)
-    doc.build(elements)
-    
-    buffer.seek(0)
-    return buffer.getvalue()
-
 # --- INIZIALIZZAZIONE SESSION STATE ---
 if "mostra_form_stagione" not in st.session_state:
     st.session_state.mostra_form_stagione = False
@@ -253,7 +178,9 @@ selected_tab = st.radio(
     label_visibility="collapsed"
 )
 
-# --- TAB SQUADRE ---
+# ==========================================
+# --- TAB 1: GESTIONE SQUADRE ---
+# ==========================================
 if st.session_state.active_tab == "Gestione Squadre":
     col_sq1, col_sq2 = st.columns([1, 2])
     
@@ -302,7 +229,9 @@ if st.session_state.active_tab == "Gestione Squadre":
             else:
                 st.info("Nessuna squadra inserita per questa stagione.")
 
-# --- TAB ATLETI ---
+# ==========================================
+# --- TAB 2: ROSA ATLETI ---
+# ==========================================
 elif st.session_state.active_tab == "Rosa Atleti":
     if not squadra_id:
         st.info("Seleziona una squadra in alto per procedere.")
@@ -510,197 +439,189 @@ elif st.session_state.active_tab == "Rosa Atleti":
         else:
             st.info("Nessun atleta presente in questa squadra.")
 
-st.title("📊 Generatore di Report Personalizzati")
-st.write("Seleziona i campi da includere, assegna un titolo personalizzato, verifica l'anteprima e scarica il report in Excel o PDF.")
+# ==========================================
+# --- TAB 3: REPORTISTICA ---
+# ==========================================
+elif st.session_state.active_tab == "Reportistica":
+    st.title("📊 Generatore di Report Personalizzati")
+    st.write("Seleziona i campi da includere, assegna un titolo personalizzato, verifica l'anteprima e scarica il report in Excel o PDF.")
 
-# 1. Recupero dati da Supabase
-dati_atleti = db.ottieni_tutti_atleti_completi()
-dati_antropometria = db.ottieni_tutte_antropometrie_complete()
+    # Recupero dati dal database
+    dati_atleti = db.ottieni_tutti_atleti_completi()
+    dati_antropometria = db.ottieni_tutte_antropometrie_complete()
 
-if dati_atleti:
-    # Creazione dei dataframe base
-    cols_atl = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
-                "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita"]
-    df_atl = pd.DataFrame(dati_atleti, columns=cols_atl)
+    if dati_atleti:
+        cols_atl = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
+                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita"]
+        df_atl = pd.DataFrame(dati_atleti, columns=cols_atl)
 
-    if dati_antropometria:
-        cols_ant = ["ID_Ant", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
-                    "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
-                    "Reach Muro", "Vertec Muro", "Jump Muro"]
-        df_ant = pd.DataFrame(dati_antropometria, columns=cols_ant)
+        if dati_antropometria:
+            cols_ant = ["ID_Ant", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
+                        "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
+                        "Reach Muro", "Vertec Muro", "Jump Muro"]
+            df_ant = pd.DataFrame(dati_antropometria, columns=cols_ant)
+            
+            # Calcolo dei Differenziali
+            df_ant["Diff. Attacco"] = pd.to_numeric(df_ant["Jump Attacco"], errors='coerce') - pd.to_numeric(df_ant["Reach Attacco"], errors='coerce')
+            df_ant["Diff. Muro"] = pd.to_numeric(df_ant["Jump Muro"], errors='coerce') - pd.to_numeric(df_ant["Reach Muro"], errors='coerce')
+            
+            # Unione dati
+            df_merged = pd.merge(df_atl, df_ant, on=["Cognome", "Nome", "Squadra"], how="left")
+        else:
+            df_merged = df_atl
+
+        st.markdown("---")
         
-        # Calcolo dei Differenziali
-        df_ant["Diff. Attacco"] = pd.to_numeric(df_ant["Jump Attacco"], errors='coerce') - pd.to_numeric(df_ant["Reach Attacco"], errors='coerce')
-        df_ant["Diff. Muro"] = pd.to_numeric(df_ant["Jump Muro"], errors='coerce') - pd.to_numeric(df_ant["Reach Muro"], errors='coerce')
+        # Titolo e nome file
+        col_tit1, col_tit2 = st.columns([2, 1])
+        with col_tit1:
+            report_title = st.text_input("🏷️ Inserisci il Titolo del Report", value="Report Personalizzato Atleti")
         
-        # Unione dati anagrafici e antropometrici
-        df_merged = pd.merge(df_atl, df_ant, on=["Cognome", "Nome", "Squadra"], how="left")
+        safe_title = "".join([c if c.isalnum() else "_" for c in report_title]).strip("_").lower()
+        if not safe_title:
+            safe_title = "report_pallavolo"
+
+        st.markdown("---")
+
+        # Selezione dei campi tramite Checkbox
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.markdown("### 🏐 Squadra & Ruolo")
+            inc_squadra = st.checkbox("Squadra", value=True)
+            inc_categoria = st.checkbox("Categoria", value=True)
+            inc_ruolo = st.checkbox("Ruolo", value=True)
+            inc_numero = st.checkbox("Numero Maglia", value=True)
+
+        with col2:
+            st.markdown("### 👤 Dati Anagrafici")
+            inc_dn = st.checkbox("Data di Nascita", value=False)
+            inc_ln = st.checkbox("Luogo di Nascita", value=False)
+            inc_cf = st.checkbox("Codice Fiscale", value=False)
+            inc_naz = st.checkbox("Nazionalità", value=False)
+            inc_visita = st.checkbox("Scadenza Visita Medica", value=True)
+
+        with col3:
+            st.markdown("### 🏠 Contatti")
+            inc_ind = st.checkbox("Indirizzo", value=False)
+            inc_cit = st.checkbox("Città", value=False)
+            inc_cap = st.checkbox("CAP", value=False)
+
+        with col4:
+            st.markdown("### 📏 Antropometria & Salti")
+            inc_data_ant = st.checkbox("Data Rilevazione", value=False)
+            inc_alt = st.checkbox("Altezza (cm)", value=True)
+            inc_peso = st.checkbox("Peso (kg)", value=True)
+            inc_r_att = st.checkbox("Reach Attacco", value=False)
+            inc_v_att = st.checkbox("Vertec Attacco", value=False)
+            inc_j_att = st.checkbox("Jump Attacco", value=True)
+            inc_d_att = st.checkbox("Diff. Attacco (Elevazione)", value=True)
+            inc_r_mur = st.checkbox("Reach Muro", value=False)
+            inc_v_mur = st.checkbox("Vertec Muro", value=False)
+            inc_j_mur = st.checkbox("Jump Muro", value=True)
+            inc_d_mur = st.checkbox("Diff. Muro (Elevazione)", value=True)
+
+        # Costruzione lista colonne
+        colonne_selezionate = ["Cognome", "Nome"]
+
+        if inc_squadra: colonne_selezionate.append("Squadra")
+        if inc_categoria: colonne_selezionate.append("Categoria")
+        if inc_ruolo: colonne_selezionate.append("Ruolo")
+        if inc_numero: colonne_selezionate.append("Numero")
+
+        if inc_dn: colonne_selezionate.append("Data Nascita")
+        if inc_ln: colonne_selezionate.append("Luogo Nascita")
+        if inc_cf: colonne_selezionate.append("Codice Fiscale")
+        if inc_naz: colonne_selezionate.append("Nazionalità")
+        if inc_visita: colonne_selezionate.append("Scadenza Visita")
+
+        if inc_ind: colonne_selezionate.append("Indirizzo")
+        if inc_cit: colonne_selezionate.append("Città")
+        if inc_cap: colonne_selezionate.append("CAP")
+
+        if dati_antropometria:
+            if inc_data_ant: colonne_selezionate.append("Data Rilevazione")
+            if inc_alt: colonne_selezionate.append("Altezza")
+            if inc_peso: colonne_selezionate.append("Peso")
+            if inc_r_att: colonne_selezionate.append("Reach Attacco")
+            if inc_v_att: colonne_selezionate.append("Vertec Attacco")
+            if inc_j_att: colonne_selezionate.append("Jump Attacco")
+            if inc_d_att: colonne_selezionate.append("Diff. Attacco")
+            if inc_r_mur: colonne_selezionate.append("Reach Muro")
+            if inc_v_mur: colonne_selezionate.append("Vertec Muro")
+            if inc_j_mur: colonne_selezionate.append("Jump Muro")
+            if inc_d_mur: colonne_selezionate.append("Diff. Muro")
+
+        df_report = df_merged[colonne_selezionate].fillna("-")
+
+        st.markdown("---")
+        st.subheader(f"📋 Anteprima: {report_title} ({len(df_report)} atleti)")
+        st.dataframe(df_report, use_container_width=True)
+
+        # Pulsanti Esportazione
+        col_exp1, col_exp2 = st.columns(2)
+
+        with col_exp1:
+            output_excel = io.BytesIO()
+            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+                df_report.to_excel(writer, index=False, sheet_name='Report')
+            excel_data = output_excel.getvalue()
+
+            st.download_button(
+                label="📥 Scarica Report Excel (.xlsx)",
+                data=excel_data,
+                file_name=f"{safe_title}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+
+        with col_exp2:
+            pdf_buffer = io.BytesIO()
+            doc = SimpleDocTemplate(
+                pdf_buffer, 
+                pagesize=landscape(letter),
+                rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                'ReportTitle',
+                parent=styles['Heading1'],
+                fontSize=14,
+                textColor=colors.HexColor('#1e3a8a'),
+                alignment=1,
+                spaceAfter=15
+            )
+            elements.append(Paragraph(report_title, title_style))
+
+            data_matrix = [list(df_report.columns)]
+            for _, row in df_report.iterrows():
+                data_matrix.append([str(val) for val in row])
+
+            t = Table(data_matrix)
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                ('TOPPADDING', (0, 0), (-1, 0), 6),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
+            ]))
+            elements.append(t)
+            
+            doc.build(elements)
+            pdf_bytes = pdf_buffer.getvalue()
+
+            st.download_button(
+                label="📄 Scarica Report PDF (.pdf)",
+                data=pdf_bytes,
+                file_name=f"{safe_title}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
     else:
-        df_merged = df_atl
-
-    st.markdown("---")
-    
-    # 2. Input Titolo del Report e generazione del nome file sicuro
-    col_tit1, col_tit2 = st.columns([2, 1])
-    with col_tit1:
-        report_title = st.text_input("🏷️ Inserisci il Titolo del Report", value="Report Personalizzato Atleti")
-    
-    # Generazione automatica del nome file basato sul titolo (rimuove spazi e caratteri speciali)
-    safe_title = "".join([c if c.isalnum() else "_" for c in report_title]).strip("_").lower()
-    if not safe_title:
-        safe_title = "report_pallavolo"
-
-    st.markdown("---")
-
-    # 3. Selezione granulare dei campi tramite Checkbox
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.markdown("### 🏐 Squadra & Ruolo")
-        inc_squadra = st.checkbox("Squadra", value=True)
-        inc_categoria = st.checkbox("Categoria", value=True)
-        inc_ruolo = st.checkbox("Ruolo", value=True)
-        inc_numero = st.checkbox("Numero Maglia", value=True)
-
-    with col2:
-        st.markdown("### 👤 Dati Anagrafici")
-        inc_dn = st.checkbox("Data di Nascita", value=False)
-        inc_ln = st.checkbox("Luogo di Nascita", value=False)
-        inc_cf = st.checkbox("Codice Fiscale", value=False)
-        inc_naz = st.checkbox("Nazionalità", value=False)
-        inc_visita = st.checkbox("Scadenza Visita Medica", value=True)
-
-    with col3:
-        st.markdown("### 🏠 Contatti")
-        inc_ind = st.checkbox("Indirizzo", value=False)
-        inc_cit = st.checkbox("Città", value=False)
-        inc_cap = st.checkbox("CAP", value=False)
-
-    with col4:
-        st.markdown("### 📏 Antropometria & Salti")
-        inc_data_ant = st.checkbox("Data Rilevazione", value=False)
-        inc_alt = st.checkbox("Altezza (cm)", value=True)
-        inc_peso = st.checkbox("Peso (kg)", value=True)
-        inc_r_att = st.checkbox("Reach Attacco", value=False)
-        inc_v_att = st.checkbox("Vertec Attacco", value=False)
-        inc_j_att = st.checkbox("Jump Attacco", value=True)
-        inc_d_att = st.checkbox("Diff. Attacco (Elevazione)", value=True)
-        inc_r_mur = st.checkbox("Reach Muro", value=False)
-        inc_v_mur = st.checkbox("Vertec Muro", value=False)
-        inc_j_mur = st.checkbox("Jump Muro", value=True)
-        inc_d_mur = st.checkbox("Diff. Muro (Elevazione)", value=True)
-
-    # 4. Costruzione dinamica della lista colonne
-    colonne_selezionate = ["Cognome", "Nome"]
-
-    if inc_squadra: colonne_selezionate.append("Squadra")
-    if inc_categoria: colonne_selezionate.append("Categoria")
-    if inc_ruolo: colonne_selezionate.append("Ruolo")
-    if inc_numero: colonne_selezionate.append("Numero")
-
-    if inc_dn: colonne_selezionate.append("Data Nascita")
-    if inc_ln: colonne_selezionate.append("Luogo Nascita")
-    if inc_cf: colonne_selezionate.append("Codice Fiscale")
-    if inc_naz: colonne_selezionate.append("Nazionalità")
-    if inc_visita: colonne_selezionate.append("Scadenza Visita")
-
-    if inc_ind: colonne_selezionate.append("Indirizzo")
-    if inc_cit: colonne_selezionate.append("Città")
-    if inc_cap: colonne_selezionate.append("CAP")
-
-    if dati_antropometria:
-        if inc_data_ant: colonne_selezionate.append("Data Rilevazione")
-        if inc_alt: colonne_selezionate.append("Altezza")
-        if inc_peso: colonne_selezionate.append("Peso")
-        if inc_r_att: colonne_selezionate.append("Reach Attacco")
-        if inc_v_att: colonne_selezionate.append("Vertec Attacco")
-        if inc_j_att: colonne_selezionate.append("Jump Attacco")
-        if inc_d_att: colonne_selezionate.append("Diff. Attacco")
-        if inc_r_mur: colonne_selezionate.append("Reach Muro")
-        if inc_v_mur: colonne_selezionate.append("Vertec Muro")
-        if inc_j_mur: colonne_selezionate.append("Jump Muro")
-        if inc_d_mur: colonne_selezionate.append("Diff. Muro")
-
-    # 5. Filtraggio dati ed Anteprima in tempo reale
-    df_report = df_merged[colonne_selezionate].fillna("-")
-
-    st.markdown("---")
-    st.subheader(f"📋 Anteprima: {report_title} ({len(df_report)} atleti)")
-    st.dataframe(df_report, use_container_width=True)
-
-    # 6. Pulsanti di Esportazione con nome file dinamico derivato dal titolo
-    col_exp1, col_exp2 = st.columns(2)
-
-    # --- ESPORTAZIONE EXCEL ---
-    with col_exp1:
-        output_excel = io.BytesIO()
-        with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-            df_report.to_excel(writer, index=False, sheet_name='Report')
-        excel_data = output_excel.getvalue()
-
-        st.download_button(
-            label="📥 Scarica Report Excel (.xlsx)",
-            data=excel_data,
-            file_name=f"{safe_title}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-
-    # --- ESPORTAZIONE PDF (tramite ReportLab) ---
-    with col_exp2:
-        from reportlab.lib.pagesizes import letter, landscape
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib import colors
-
-        pdf_buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            pdf_buffer, 
-            pagesize=landscape(letter),
-            rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
-        )
-        elements = []
-        styles = getSampleStyleSheet()
-
-        # Stile del titolo stampato all'interno del documento PDF
-        title_style = ParagraphStyle(
-            'ReportTitle',
-            parent=styles['Heading1'],
-            fontSize=14,
-            textColor=colors.HexColor('#1e3a8a'),
-            alignment=1,
-            spaceAfter=15
-        )
-        elements.append(Paragraph(report_title, title_style))
-
-        # Conversione dei dati della tabella per la generazione PDF
-        data_matrix = [list(df_report.columns)]
-        for _, row in df_report.iterrows():
-            data_matrix.append([str(val) for val in row])
-
-        t = Table(data_matrix)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-            ('TOPPADDING', (0, 0), (-1, 0), 6),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
-        ]))
-        elements.append(t)
-        
-        doc.build(elements)
-        pdf_bytes = pdf_buffer.getvalue()
-
-        st.download_button(
-            label="📄 Scarica Report PDF (.pdf)",
-            data=pdf_bytes,
-            file_name=f"{safe_title}.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
-else:
-    st.info("Nessun atleta presente nel database per generare il report.")
+        st.info("Nessun atleta presente nel database per generare report.")
