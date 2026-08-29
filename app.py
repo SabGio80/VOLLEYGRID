@@ -143,14 +143,18 @@ if stagione_id:
 with col_top3:
     options_sq = list(squadre_dict.keys()) if squadre_dict else ["Nessuna"]
     
+    # Gestione corretta della selezione dinamica della squadra da tabelle esterne
     if st.session_state.squadra_da_selezionare in options_sq:
-        st.session_state.squadra_scelta_key = st.session_state.squadra_da_selezionare
+        idx_default = options_sq.index(st.session_state.squadra_da_selezionare)
         st.session_state.squadra_da_selezionare = None
-        
+    else:
+        idx_default = 0
+
     squadra_scelta = st.selectbox(
         "Squadra Attiva:", 
         options=options_sq,
-        key="squadra_scelta_key"
+        index=idx_default,
+        key="squadra_scelta_select"
     )
     squadra_id = squadre_dict.get(squadra_scelta)
 
@@ -248,9 +252,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
             if "select_atleta_attivo" not in st.session_state or st.session_state.select_atleta_attivo not in df_atleti["ID Database"].values:
                 st.session_state.select_atleta_attivo = int(df_atleti["ID Database"].iloc[0])
 
-            # -------------------------------------------------------------------
-            # SEZIONE SUPERIORE: SELEZIONE E SCHEDA ATLETA SELEZIONATO
-            # -------------------------------------------------------------------
             st.subheader("👤 Atleta Selezionato")
             
             opzioni_atleti = {a[4]: f"N°{a[0]} - {a[1]} {a[2]} ({a[3]})" for a in atleti}
@@ -265,7 +266,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
             
             atleta_attuale = next((a for a in atleti if a[4] == atleta_id_scelto), None)
 
-            # FORM DI MODIFICA / CREAZIONE + SCHEDE DATI
             col_form1, col_form2 = st.columns([1, 2])
             
             with col_form1:
@@ -325,7 +325,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
                                 st.session_state.modo_nuovo_atleta = False
                                 st.rerun()
 
-            # SEZIONE DATI ANAGRAFICI E ANTROPOMETRICI APPENA SOTTO L'ATLETA
             with col_form2:
                 if atleta_id_scelto and not st.session_state.modo_nuovo_atleta:
                     tab_anag, tab_antrop = st.tabs(["📝 Dati Anagrafici", "📊 Dati Antropometrici"])
@@ -401,9 +400,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
 
             st.divider()
 
-            # -------------------------------------------------------------------
-            # SEZIONE INFERIORE: ELENCO COMPLETO DELLA ROSA ATLETI
-            # -------------------------------------------------------------------
             st.subheader("📋 Elenco Completo Rosa Atleti")
             st.caption("💡 Clicca su una riga per selezionare l'atleta ed editarne le schede in alto.")
 
@@ -460,9 +456,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
 
         tab_sedute, tab_creatore = st.tabs(["📅 Gestione Sedute & Presenze", "✏️ Creatore Esercizi & Campo Tattico"])
 
-        # -------------------------------------------------------------------
-        # SUB-TAB 1: GESTIONE SEDUTE, ORA, LUOGO E PRESENZE
-        # -------------------------------------------------------------------
         with tab_sedute:
             col_p1, col_p2 = st.columns([1, 2])
 
@@ -571,9 +564,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                             st.session_state.progr_sedute.pop(idx)
                             st.rerun()
 
-        # -------------------------------------------------------------------
-        # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO
-        # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
             st.caption("Campo di sfondo fisso, frecce dritte/curve orientabili e colori personalizzabili.")
@@ -687,9 +677,6 @@ elif st.session_state.active_tab == "Reportistica":
         
         col_rep1, col_rep2 = st.columns(2)
 
-        # -------------------------------------------------------------------
-        # REPORT 1: REPORT PERSONALIZZATO ROSA ATLETI
-        # -------------------------------------------------------------------
         with col_rep1:
             st.markdown("### 🛠️ Report Personalizzato Rosa Atleti")
             st.write("Scegli le colonne da includere nel PDF della rosa:")
@@ -785,9 +772,6 @@ elif st.session_state.active_tab == "Reportistica":
                         mime="application/pdf"
                     )
 
-        # -------------------------------------------------------------------
-        # REPORT 2: SCHEDA PROGRAMMAZIONE SEDUTE ALLENAMENTO
-        # -------------------------------------------------------------------
         with col_rep2:
             st.markdown("### 📋 Report Programmazione Allenamenti")
             st.write("Esporta il programma dettagliato delle sedute di allenamento registrate con relativi esercizi, tempi e presenze.")
