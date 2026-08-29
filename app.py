@@ -235,9 +235,7 @@ elif st.session_state.active_tab == "Rosa Atleti":
     if not squadra_id:
         st.info("Seleziona una squadra in alto per procedere.")
     else:
-        col_form, col_list = st.columns([1, 2])
         atleti = db.ottieni_atleti_per_squadra(squadra_id)
-        
         lista_ruoli = ["Alzatore", "Opposto", "Schiacciatore", "Centrale", "Libero", "Universale"]
 
         if atleti:
@@ -250,48 +248,32 @@ elif st.session_state.active_tab == "Rosa Atleti":
             if "select_atleta_attivo" not in st.session_state or st.session_state.select_atleta_attivo not in df_atleti["ID Database"].values:
                 st.session_state.select_atleta_attivo = int(df_atleti["ID Database"].iloc[0])
 
-            with col_list:
-                st.subheader("Rosa della Squadra")
-                
-                opzioni_atleti = {a[4]: f"N°{a[0]} - {a[1]} {a[2]} ({a[3]})" for a in atleti}
-                
-                atleta_id_scelto = st.selectbox(
-                    "Atleta Attivo Selezionato:",
-                    options=list(opzioni_atleti.keys()),
-                    format_func=lambda x: opzioni_atleti[x],
-                    key="select_atleta_attivo",
-                    on_change=lambda: st.session_state.update({"modo_nuovo_atleta": False})
-                )
-                
-                atleta_attuale = next((a for a in atleti if a[4] == atleta_id_scelto), None)
+            # -------------------------------------------------------------------
+            # SEZIONE SUPERIORE: SELEZIONE E SCHEDA ATLETA SELEZIONATO
+            # -------------------------------------------------------------------
+            st.subheader("👤 Atleta Selezionato")
+            
+            opzioni_atleti = {a[4]: f"N°{a[0]} - {a[1]} {a[2]} ({a[3]})" for a in atleti}
+            
+            atleta_id_scelto = st.selectbox(
+                "Seleziona Atleta:",
+                options=list(opzioni_atleti.keys()),
+                format_func=lambda x: opzioni_atleti[x],
+                key="select_atleta_attivo",
+                on_change=lambda: st.session_state.update({"modo_nuovo_atleta": False})
+            )
+            
+            atleta_attuale = next((a for a in atleti if a[4] == atleta_id_scelto), None)
 
-                st.caption("💡 Clicca sull'intestazione di una colonna per ordinare. Clicca su una riga per selezionare l'atleta.")
-
-                event = st.dataframe(
-                    df_atleti[["N° Maglia", "Cognome", "Nome", "Ruolo"]],
-                    use_container_width=True,
-                    hide_index=True,
-                    on_select="rerun",
-                    selection_mode="single-row"
-                )
-
-                if event and event.selection and event.selection.rows:
-                    selected_index = event.selection.rows[0]
-                    selected_id = int(df_atleti.iloc[selected_index]["ID Database"])
-                    if selected_id != st.session_state.select_atleta_attivo:
-                        st.session_state.target_atleta_id = selected_id
-                        st.session_state.modo_nuovo_atleta = False
-                        st.rerun()
-
-            with col_form:
-                st.subheader("Nuovo / Modifica Atleta")
-                
+            # FORM DI MODIFICA / CREAZIONE + SCHEDE DATI
+            col_form1, col_form2 = st.columns([1, 2])
+            
+            with col_form1:
                 if atleta_attuale and not st.session_state.modo_nuovo_atleta:
-                    st.info(f"Atleta Attivo: **{atleta_attuale[2]} {atleta_attuale[1]}**")
-                    
+                    st.info(f"Modifica: **{atleta_attuale[2]} {atleta_attuale[1]}**")
                     foto_db = atleta_attuale[5]
                     if foto_db:
-                        st.image(foto_db, width=150, caption="Foto Atleta")
+                        st.image(foto_db, width=130, caption="Foto Atleta")
 
                     val_numero = int(atleta_attuale[0]) if atleta_attuale[0] else 1
                     val_cognome = atleta_attuale[1] or ""
@@ -302,7 +284,6 @@ elif st.session_state.active_tab == "Rosa Atleti":
                     cognome = st.text_input("Cognome", value=val_cognome, key=f"mod_cognome_{atleta_id_scelto}", disabled=not is_admin)
                     ruolo = st.selectbox("Ruolo", lista_ruoli, index=lista_ruoli.index(val_ruolo), key=f"mod_ruolo_{atleta_id_scelto}", disabled=not is_admin)
                     numero = st.number_input("N° Maglia", min_value=1, max_value=99, step=1, value=val_numero, key=f"mod_numero_{atleta_id_scelto}", disabled=not is_admin)
-                    
                     foto_file = st.file_uploader("Aggiorna/Carica Foto", type=["jpg", "jpeg", "png"], key=f"mod_foto_{atleta_id_scelto}", disabled=not is_admin)
                     
                     col_b1, col_b2 = st.columns(2)
@@ -344,98 +325,103 @@ elif st.session_state.active_tab == "Rosa Atleti":
                                 st.session_state.modo_nuovo_atleta = False
                                 st.rerun()
 
-            with col_list:
-                if atleta_id_scelto:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        with st.expander("📝 Dati Anagrafici"):
-                            curr = db.ottieni_dati_atleta_completi(atleta_id_scelto)
-                            if curr:
+            # SEZIONE DATI ANAGRAFICI E ANTROPOMETRICI APPENA SOTTO L'ATLETA
+            with col_form2:
+                if atleta_id_scelto and not st.session_state.modo_nuovo_atleta:
+                    tab_anag, tab_antrop = st.tabs(["📝 Dati Anagrafici", "📊 Dati Antropometrici"])
+                    
+                    with tab_anag:
+                        curr = db.ottieni_dati_atleta_completi(atleta_id_scelto)
+                        if curr:
+                            c1, c2 = st.columns(2)
+                            with c1:
                                 dn = st.text_input("Data Nascita (GG/MM/AAAA)", value=curr[5] or "", key=f"dn_{atleta_id_scelto}", disabled=not is_admin)
                                 ln = st.text_input("Luogo Nascita", value=curr[6] or "", key=f"ln_{atleta_id_scelto}", disabled=not is_admin)
                                 cf = st.text_input("Codice Fiscale", value=curr[7] or "", key=f"cf_{atleta_id_scelto}", disabled=not is_admin)
                                 email = st.text_input("Email", value=curr[14] if len(curr) > 14 and curr[14] else "", key=f"email_{atleta_id_scelto}", disabled=not is_admin)
                                 tel = st.text_input("Telefono / Cellulare", value=curr[13] if len(curr) > 13 and curr[13] else "", key=f"tel_{atleta_id_scelto}", disabled=not is_admin)
+                            with c2:
                                 ind = st.text_input("Indirizzo", value=curr[8] or "", key=f"ind_{atleta_id_scelto}", disabled=not is_admin)
                                 cit = st.text_input("Città", value=curr[9] or "", key=f"cit_{atleta_id_scelto}", disabled=not is_admin)
                                 cap = st.text_input("CAP", value=curr[10] or "", key=f"cap_{atleta_id_scelto}", disabled=not is_admin)
                                 naz = st.text_input("Nazionalità", value=curr[11] or "", key=f"naz_{atleta_id_scelto}", disabled=not is_admin)
                                 vis = st.text_input("Scadenza Visita (GG/MM/AAAA)", value=curr[12] or "", key=f"vis_{atleta_id_scelto}", disabled=not is_admin)
-                                
-                                if st.button("Aggiorna Anagrafica", disabled=not is_admin):
-                                    db.aggiorna_anagrafica_atleta(atleta_id_scelto, dn, ln, cf, ind, cit, cap, naz, vis, tel, email)
-                                    st.success("Anagrafica aggiornata!")
-                                    st.rerun()
-                    with col_btn2:
-                        with st.expander("📊 Dati Antropometrici"):
-                            st.write("**Registra Nuova Rilevazione**")
-                            data_ril = st.date_input("Data Rilevazione", key=f"dt_ril_{atleta_id_scelto}", disabled=not is_admin).strftime("%d/%m/%Y")
                             
-                            col_a1, col_a2 = st.columns(2)
-                            with col_a1:
-                                alt = st.number_input("Altezza (cm)", value=0.0, step=0.5, key=f"alt_{atleta_id_scelto}", disabled=not is_admin)
-                            with col_a2:
-                                peso = st.number_input("Peso (kg)", value=0.0, step=0.5, key=f"peso_{atleta_id_scelto}", disabled=not is_admin)
-                            
-                            st.markdown("---")
-                            
-                            st.write("**Test Salto Attacco**")
-                            c_r1, c_v1, c_j1 = st.columns(3)
-                            with c_r1:
-                                r1 = st.number_input("Reach 1 (cm)", value=0.0, step=1.0, key=f"r1_{atleta_id_scelto}", disabled=not is_admin)
-                            with c_v1:
-                                v1 = st.number_input("Vertec 1 (cm)", value=0.0, step=1.0, key=f"v1_{atleta_id_scelto}", disabled=not is_admin)
-                            
-                            j1 = v1 - r1 if (v1 > 0 and r1 > 0) else 0.0
-                            with c_j1:
-                                st.number_input("Jump 1 (cm)", value=float(j1), disabled=True, key=f"j1_{atleta_id_scelto}")
-
-                            st.write("**Test Salto Muro**")
-                            c_r2, c_v2, c_j2 = st.columns(3)
-                            with c_r2:
-                                r2 = st.number_input("Reach 2 (cm)", value=0.0, step=1.0, key=f"r2_{atleta_id_scelto}", disabled=not is_admin)
-                            with c_v2:
-                                v2 = st.number_input("Vertec 2 (cm)", value=0.0, step=1.0, key=f"v2_{atleta_id_scelto}", disabled=not is_admin)
-                            
-                            j2 = v2 - r2 if (v2 > 0 and r2 > 0) else 0.0
-                            with c_j2:
-                                st.number_input("Jump 2 (cm)", value=float(j2), disabled=True, key=f"j2_{atleta_id_scelto}")
-
-                            st.markdown("---")
-                            
-                            diff_jump = j1 - j2
-                            st.number_input("Differenziale (Jump 1 - Jump 2)", value=float(diff_jump), disabled=True, key=f"diff_{atleta_id_scelto}")
-
-                            if st.button("Salva Rilevazione", type="primary", disabled=not is_admin):
-                                db.aggiungi_antropometria(
-                                    atleta_id_scelto, data_ril, alt, peso, 
-                                    r1, v1, j1, r2, v2, j2
-                                )
-                                st.success("Misurazione registrata con successo!")
+                            if st.button("Aggiorna Anagrafica", type="primary", disabled=not is_admin):
+                                db.aggiorna_anagrafica_atleta(atleta_id_scelto, dn, ln, cf, ind, cit, cap, naz, vis, tel, email)
+                                st.success("Anagrafica aggiornata!")
                                 st.rerun()
-                            
-                            st.divider()
-                            st.write("**Storico Rilevazioni**")
-                            ant_data = db.ottieni_antropometria_atleta(atleta_id_scelto)
-                            if ant_data:
-                                df_ant = pd.DataFrame(
-                                    ant_data, 
-                                    columns=["ID", "Data", "Altezza (cm)", "Peso (kg)", "Reach 1", "Vertec 1", "Jump 1", "Reach 2", "Vertec 2", "Jump 2"]
-                                )
-                                df_ant["Diff."] = df_ant["Jump 1"] - df_ant["Jump 2"]
-                                
-                                st.dataframe(
-                                    df_ant[["Data", "Altezza (cm)", "Peso (kg)", "Reach 1", "Vertec 1", "Jump 1", "Reach 2", "Vertec 2", "Jump 2", "Diff."]], 
-                                    use_container_width=True
-                                )
 
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("❌ Elimina Atleta", type="primary", disabled=not is_admin):
+                    with tab_antrop:
+                        st.write("**Registra Nuova Rilevazione**")
+                        data_ril = st.date_input("Data Rilevazione", key=f"dt_ril_{atleta_id_scelto}", disabled=not is_admin).strftime("%d/%m/%Y")
+                        
+                        col_a1, col_a2 = st.columns(2)
+                        with col_a1:
+                            alt = st.number_input("Altezza (cm)", value=0.0, step=0.5, key=f"alt_{atleta_id_scelto}", disabled=not is_admin)
+                        with col_a2:
+                            peso = st.number_input("Peso (kg)", value=0.0, step=0.5, key=f"peso_{atleta_id_scelto}", disabled=not is_admin)
+                        
+                        c_r1, c_v1, c_j1 = st.columns(3)
+                        with c_r1:
+                            r1 = st.number_input("Reach 1 (Attacco)", value=0.0, step=1.0, key=f"r1_{atleta_id_scelto}", disabled=not is_admin)
+                        with c_v1:
+                            v1 = st.number_input("Vertec 1", value=0.0, step=1.0, key=f"v1_{atleta_id_scelto}", disabled=not is_admin)
+                        j1 = v1 - r1 if (v1 > 0 and r1 > 0) else 0.0
+                        with c_j1:
+                            st.number_input("Jump 1", value=float(j1), disabled=True, key=f"j1_{atleta_id_scelto}")
+
+                        c_r2, c_v2, c_j2 = st.columns(3)
+                        with c_r2:
+                            r2 = st.number_input("Reach 2 (Muro)", value=0.0, step=1.0, key=f"r2_{atleta_id_scelto}", disabled=not is_admin)
+                        with c_v2:
+                            v2 = st.number_input("Vertec 2", value=0.0, step=1.0, key=f"v2_{atleta_id_scelto}", disabled=not is_admin)
+                        j2 = v2 - r2 if (v2 > 0 and r2 > 0) else 0.0
+                        with c_j2:
+                            st.number_input("Jump 2", value=float(j2), disabled=True, key=f"j2_{atleta_id_scelto}")
+
+                        if st.button("Salva Misurazione", type="primary", disabled=not is_admin):
+                            db.aggiungi_antropometria(atleta_id_scelto, data_ril, alt, peso, r1, v1, j1, r2, v2, j2)
+                            st.success("Misurazione registrata!")
+                            st.rerun()
+
+                        st.divider()
+                        st.write("**Storico Rilevazioni**")
+                        ant_data = db.ottieni_antropometria_atleta(atleta_id_scelto)
+                        if ant_data:
+                            df_ant = pd.DataFrame(ant_data, columns=["ID", "Data", "Altezza", "Peso", "Reach 1", "Vertec 1", "Jump 1", "Reach 2", "Vertec 2", "Jump 2"])
+                            df_ant["Diff."] = df_ant["Jump 1"] - df_ant["Jump 2"]
+                            st.dataframe(df_ant[["Data", "Altezza", "Peso", "Reach 1", "Vertec 1", "Jump 1", "Reach 2", "Vertec 2", "Jump 2", "Diff."]], use_container_width=True)
+
+                    if st.button("❌ Elimina Atleta", type="secondary", disabled=not is_admin):
                         db.elimina_atleta(atleta_id_scelto)
                         st.session_state.pop("select_atleta_attivo", None)
                         st.success("Atleta eliminato.")
                         st.rerun()
+
+            st.divider()
+
+            # -------------------------------------------------------------------
+            # SEZIONE INFERIORE: ELENCO COMPLETO DELLA ROSA ATLETI
+            # -------------------------------------------------------------------
+            st.subheader("📋 Elenco Completo Rosa Atleti")
+            st.caption("💡 Clicca su una riga per selezionare l'atleta ed editarne le schede in alto.")
+
+            event = st.dataframe(
+                df_atleti[["N° Maglia", "Cognome", "Nome", "Ruolo"]],
+                use_container_width=True,
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="single-row"
+            )
+
+            if event and event.selection and event.selection.rows:
+                selected_index = event.selection.rows[0]
+                selected_id = int(df_atleti.iloc[selected_index]["ID Database"])
+                if selected_id != st.session_state.select_atleta_attivo:
+                    st.session_state.target_atleta_id = selected_id
+                    st.session_state.modo_nuovo_atleta = False
+                    st.rerun()
         else:
             st.info("Nessun atleta presente in questa squadra.")
 
@@ -702,72 +688,102 @@ elif st.session_state.active_tab == "Reportistica":
         col_rep1, col_rep2 = st.columns(2)
 
         # -------------------------------------------------------------------
-        # REPORT 1: SCHEDA SQUADRA E ANAGRAFICA ATLETI
+        # REPORT 1: REPORT PERSONALIZZATO ROSA ATLETI
         # -------------------------------------------------------------------
         with col_rep1:
-            st.markdown("### 👥 Report Rosa Squadra")
-            st.write("Genera un documento PDF contenente il dettaglio completo dell'organico e delle schede anagrafiche.")
+            st.markdown("### 🛠️ Report Personalizzato Rosa Atleti")
+            st.write("Scegli le colonne da includere nel PDF della rosa:")
 
-            if st.button("📄 Genera PDF Rosa Squadra", type="primary"):
-                atleti_squadra = db.ottieni_atleti_per_squadra(squadra_id)
-                
-                buffer = io.BytesIO()
-                doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-                styles = getSampleStyleSheet()
-                elements = []
+            mappatura_campi = {
+                "N° Maglia": "numero",
+                "Cognome": "cognome",
+                "Nome": "nome",
+                "Ruolo": "ruolo",
+                "Data Nascita": "dn",
+                "Luogo Nascita": "ln",
+                "Codice Fiscale": "cf",
+                "Telefono": "tel",
+                "Email": "email",
+                "Indirizzo": "ind",
+                "Città": "cit",
+                "Scadenza Visita": "vis"
+            }
 
-                title_style = ParagraphStyle(
-                    'TitleStyle',
-                    parent=styles['Heading1'],
-                    fontSize=18,
-                    leading=22,
-                    textColor=colors.HexColor('#1A2B4C'),
-                    alignment=1
-                )
-                elements.append(Paragraph(f"ROSA SQUADRA: {squadra_scelta}", title_style))
-                elements.append(Paragraph(f"Stagione: {stagione_scelta} | Generato il: {datetime.now().strftime('%d/%m/%Y')}", styles['Normal']))
-                elements.append(Spacer(1, 15))
+            campi_selezionati = st.multiselect(
+                "Campi da includere nel report:",
+                options=list(mappatura_campi.keys()),
+                default=["N° Maglia", "Cognome", "Nome", "Ruolo", "Data Nascita", "Telefono"]
+            )
 
-                if atleti_squadra:
-                    data_table = [["N°", "Cognome", "Nome", "Ruolo", "Data Nascita", "Telefono"]]
-                    for atl in atleti_squadra:
-                        det = db.ottieni_dati_atleta_completi(atl[4])
-                        dn_val = det[5] if det and len(det) > 5 and det[5] else "-"
-                        tel_val = det[13] if det and len(det) > 13 and det[13] else "-"
-                        
-                        data_table.append([
-                            str(atl[0] or "-"),
-                            str(atl[1] or "-"),
-                            str(atl[2] or "-"),
-                            str(atl[3] or "-"),
-                            dn_val,
-                            tel_val
-                        ])
-
-                    t = Table(data_table, colWidths=[30, 100, 100, 90, 90, 100])
-                    t.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1A2B4C')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, -1), 9),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F5F5F5')),
-                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
-                    ]))
-                    elements.append(t)
+            if st.button("📄 Genera PDF Personalizzato", type="primary"):
+                if not campi_selezionati:
+                    st.warning("Seleziona almeno un campo per generare il PDF.")
                 else:
-                    elements.append(Paragraph("Nessun atleta registrato per questa squadra.", styles['Normal']))
+                    atleti_squadra = db.ottieni_atleti_per_squadra(squadra_id)
+                    
+                    buffer = io.BytesIO()
+                    pagesize_choice = landscape(A4) if len(campi_selezionati) > 5 else A4
+                    doc = SimpleDocTemplate(buffer, pagesize=pagesize_choice, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+                    styles = getSampleStyleSheet()
+                    elements = []
 
-                doc.build(elements)
-                buffer.seek(0)
+                    title_style = ParagraphStyle(
+                        'TitleStyle', parent=styles['Heading1'], fontSize=16, leading=20,
+                        textColor=colors.HexColor('#1A2B4C'), alignment=1
+                    )
+                    elements.append(Paragraph(f"REPORT ATLETI: {squadra_scelta}", title_style))
+                    elements.append(Paragraph(f"Stagione: {stagione_scelta} | Generato il: {datetime.now().strftime('%d/%m/%Y')}", styles['Normal']))
+                    elements.append(Spacer(1, 12))
 
-                st.download_button(
-                    label="💾 Scarica PDF Rosa",
-                    data=buffer,
-                    file_name=f"Rosa_{squadra_scelta.replace(' ', '_')}.pdf",
-                    mime="application/pdf"
-                )
+                    if atleti_squadra:
+                        header_table = campi_selezionati
+                        data_table = [header_table]
+
+                        for atl in atleti_squadra:
+                            det = db.ottieni_dati_atleta_completi(atl[4])
+                            
+                            valori_atleta = {
+                                "N° Maglia": str(atl[0] or "-"),
+                                "Cognome": str(atl[1] or "-"),
+                                "Nome": str(atl[2] or "-"),
+                                "Ruolo": str(atl[3] or "-"),
+                                "Data Nascita": str(det[5]) if det and len(det) > 5 and det[5] else "-",
+                                "Luogo Nascita": str(det[6]) if det and len(det) > 6 and det[6] else "-",
+                                "Codice Fiscale": str(det[7]) if det and len(det) > 7 and det[7] else "-",
+                                "Indirizzo": str(det[8]) if det and len(det) > 8 and det[8] else "-",
+                                "Città": str(det[9]) if det and len(det) > 9 and det[9] else "-",
+                                "Scadenza Visita": str(det[12]) if det and len(det) > 12 and det[12] else "-",
+                                "Telefono": str(det[13]) if det and len(det) > 13 and det[13] else "-",
+                                "Email": str(det[14]) if det and len(det) > 14 and det[14] else "-"
+                            }
+                            
+                            riga = [valori_atleta[campo] for campo in campi_selezionati]
+                            data_table.append(riga)
+
+                        t = Table(data_table)
+                        t.setStyle(TableStyle([
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1A2B4C')),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                            ('FONTSIZE', (0, 0), (-1, -1), 8),
+                            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F5F5F5')),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+                        ]))
+                        elements.append(t)
+                    else:
+                        elements.append(Paragraph("Nessun atleta registrato per questa squadra.", styles['Normal']))
+
+                    doc.build(elements)
+                    buffer.seek(0)
+
+                    st.download_button(
+                        label="💾 Scarica PDF Personalizzato",
+                        data=buffer,
+                        file_name=f"Report_Personalizzato_{squadra_scelta.replace(' ', '_')}.pdf",
+                        mime="application/pdf"
+                    )
 
         # -------------------------------------------------------------------
         # REPORT 2: SCHEDA PROGRAMMAZIONE SEDUTE ALLENAMENTO
