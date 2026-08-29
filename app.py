@@ -594,7 +594,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         if is_admin and st.button(f"🗑️ Elimina {seduta['Seduta']}", key=f"del_sed_{idx}"):
                             st.session_state.progr_sedute.pop(idx)
                             st.rerun()
-
         # -------------------------------------------------------------------
         # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO
         # -------------------------------------------------------------------
@@ -604,19 +603,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
 
             import io
             import base64
+            import streamlit.runtime.media_file_manager as mfm
             import streamlit_drawable_canvas as sdc
             from PIL import Image, ImageDraw
 
-            # Monkey-patch temporaneo per evitare i bug di compatibilità di streamlit-drawable-canvas
-            def patch_resize_img(img, new_height, new_width):
-                if isinstance(img, str):
-                    return img
-                return img.resize((new_width, new_height))
-
-            sdc._resize_img = patch_resize_img
-
-            # Funzione per generare l'immagine del campo da pallavolo
-            def crea_immagine_campo_b64():
+            # Funzione per generare l'immagine del campo da pallavolo (PIL Image)
+            def crea_immagine_campo():
                 w, h = 600, 400
                 img = Image.new("RGB", (w, h), "#D2691E") # Parquet
                 draw = ImageDraw.Draw(img)
@@ -634,12 +626,18 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 draw.line([(m + dist_3m * 2, m), (m + dist_3m * 2, h - m)], fill="white", width=2)
                 draw.line([(w - m - dist_3m * 2, m), (w - m - dist_3m * 2, h - m)], fill="white", width=2)
                 
+                return img
+
+            campo_pil = crea_immagine_campo()
+
+            # FIX DEFINITIVO: Patch di st_image.image_to_url per compatibilità con le nuove versioni di Streamlit
+            def custom_image_to_url(image, width, clamp, channels, output_format, image_id):
                 buffered = io.BytesIO()
-                img.save(buffered, format="PNG")
+                image.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
                 return f"data:image/png;base64,{img_str}"
 
-            campo_b64 = crea_immagine_campo_b64()
+            sdc.st_image.image_to_url = custom_image_to_url
 
             col_canv, col_info_ex = st.columns([3, 2])
 
@@ -661,11 +659,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 with c_tool3:
                     stroke_width = st.slider("Spessore linea:", 1, 10, 3, key="stroke_w")
 
+                # Passiamo direttamente l'oggetto PIL Image
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 165, 0, 0.3)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_image=campo_b64,
+                    background_image=campo_pil,
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
