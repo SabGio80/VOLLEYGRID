@@ -444,7 +444,7 @@ elif st.session_state.active_tab == "Rosa Atleti":
 # ==========================================
 elif st.session_state.active_tab == "Reportistica":
     st.title("📊 Generatore di Report Personalizzati")
-    st.write("Seleziona i campi da includere, assegna un titolo personalizzato, verifica l'anteprima e scarica il report in Excel o PDF.")
+    st.write("Seleziona i campi e le righe da includere, verifica l'anteprima in tempo reale e scarica il report in Excel o PDF.")
 
     # Recupero dati dal database
     dati_atleti = db.ottieni_tutti_atleti_completi()
@@ -461,8 +461,7 @@ elif st.session_state.active_tab == "Reportistica":
                         "Reach Muro", "Vertec Muro", "Jump Muro"]
             df_ant = pd.DataFrame(dati_antropometria, columns=cols_ant)
             
-            # Calcolo dei Differenziali Corretti:
-            # Jump Attacco e Jump Muro rappresentano l'elevazione netta (Vertec - Reach)
+            # Calcolo dei Differenziali
             df_ant["Diff. Salti (Att. - Muro)"] = pd.to_numeric(df_ant["Jump Attacco"], errors='coerce') - pd.to_numeric(df_ant["Jump Muro"], errors='coerce')
             
             # Unione dati
@@ -483,7 +482,7 @@ elif st.session_state.active_tab == "Reportistica":
 
         st.markdown("---")
 
-        # Selezione dei campi tramite Checkbox
+        # Selezione dei campi (Colonne) tramite Checkbox
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -550,96 +549,125 @@ elif st.session_state.active_tab == "Reportistica":
             if inc_j_mur: colonne_selezionate.append("Jump Muro")
             if inc_d_salti: colonne_selezionate.append("Diff. Salti (Att. - Muro)")
 
-        df_report = df_merged[colonne_selezionate].fillna("-")
+        # Preparazione DataFrame base con colonna di selezione righe
+        df_base = df_merged[colonne_selezionate].fillna("-")
+        df_base.insert(0, "Includi", True)
 
         st.markdown("---")
-        st.subheader(f"📋 Anteprima: {report_title} ({len(df_report)} atleti)")
-        st.dataframe(df_report, use_container_width=True)
+        st.subheader("☑️ Selezione Righe da Includere")
+        st.caption("Spunta o despunta la casella 'Includi' per scegliere quali atleti mostrare nell'anteprima ed esportare.")
 
-        # Pulsanti Esportazione
-        col_exp1, col_exp2 = st.columns(2)
+        # Tabella interattiva per selezionare le righe
+        edited_df = st.data_editor(
+            df_base,
+            column_config={
+                "Includi": st.column_config.CheckboxColumn(
+                    "Includi nel Report",
+                    help="Spunta per includere l'atleta nel report",
+                    default=True
+                )
+            },
+            disabled=[c for c in df_base.columns if c != "Includi"],
+            hide_index=True,
+            use_container_width=True,
+            key="editor_righe_report"
+        )
 
-        with col_exp1:
-            output_excel = io.BytesIO()
-            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-                df_report.to_excel(writer, index=False, sheet_name='Report')
-            excel_data = output_excel.getvalue()
+        # Filtraggio righe selezionate
+        df_report = edited_df[edited_df["Includi"] == True].drop(columns=["Includi"])
 
-            st.download_button(
-                label="📥 Scarica Report Excel (.xlsx)",
-                data=excel_data,
-                file_name=f"{safe_title}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+        st.markdown("---")
+        st.subheader(f"📋 Anteprima Finale Report: {report_title} ({len(df_report)} atleti selezionati)")
+        
+        if not df_report.empty:
+            # Anteprima della tabella finale che verrà stampata/scaricata
+            st.dataframe(df_report, use_container_width=True, hide_index=True)
 
-        with col_exp2:
-            pdf_buffer = io.BytesIO()
-            doc = SimpleDocTemplate(
-                pdf_buffer, 
-                pagesize=landscape(letter),
-                rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
-            )
-            elements = []
-            styles = getSampleStyleSheet()
+            # Pulsanti Esportazione
+            col_exp1, col_exp2 = st.columns(2)
 
-            title_style = ParagraphStyle(
-                'ReportTitle',
-                parent=styles['Heading1'],
-                fontSize=14,
-                textColor=colors.HexColor('#1e3a8a'),
-                alignment=1,
-                spaceAfter=15
-            )
-            elements.append(Paragraph(report_title, title_style))
+            with col_exp1:
+                output_excel = io.BytesIO()
+                with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+                    df_report.to_excel(writer, index=False, sheet_name='Report')
+                excel_data = output_excel.getvalue()
 
-            cell_style_header = ParagraphStyle(
-                'HeaderStyle',
-                parent=styles['Normal'],
-                fontName='Helvetica-Bold',
-                fontSize=8,
-                textColor=colors.whitesmoke,
-                alignment=1
-            )
+                st.download_button(
+                    label="📥 Scarica Report Excel (.xlsx)",
+                    data=excel_data,
+                    file_name=f"{safe_title}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
 
-            cell_style_body = ParagraphStyle(
-                'BodyStyle',
-                parent=styles['Normal'],
-                fontName='Helvetica',
-                fontSize=7,
-                textColor=colors.black,
-                alignment=1
-            )
+            with col_exp2:
+                pdf_buffer = io.BytesIO()
+                doc = SimpleDocTemplate(
+                    pdf_buffer, 
+                    pagesize=landscape(letter),
+                    rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
+                )
+                elements = []
+                styles = getSampleStyleSheet()
 
-            # Inseriamo i Paragraph nelle celle per garantire il text-wrapping
-            header_row = [Paragraph(str(col), cell_style_header) for col in df_report.columns]
-            data_matrix = [header_row]
+                title_style = ParagraphStyle(
+                    'ReportTitle',
+                    parent=styles['Heading1'],
+                    fontSize=14,
+                    textColor=colors.HexColor('#1e3a8a'),
+                    alignment=1,
+                    spaceAfter=15
+                )
+                elements.append(Paragraph(report_title, title_style))
 
-            for _, row in df_report.iterrows():
-                row_cells = [Paragraph(str(val), cell_style_body) for val in row]
-                data_matrix.append(row_cells)
+                cell_style_header = ParagraphStyle(
+                    'HeaderStyle',
+                    parent=styles['Normal'],
+                    fontName='Helvetica-Bold',
+                    fontSize=8,
+                    textColor=colors.whitesmoke,
+                    alignment=1
+                )
 
-            t = Table(data_matrix)
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                ('TOPPADDING', (0, 0), (-1, -1), 4),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
-            ]))
-            elements.append(t)
-            
-            doc.build(elements)
-            pdf_bytes = pdf_buffer.getvalue()
+                cell_style_body = ParagraphStyle(
+                    'BodyStyle',
+                    parent=styles['Normal'],
+                    fontName='Helvetica',
+                    fontSize=7,
+                    textColor=colors.black,
+                    alignment=1
+                )
 
-            st.download_button(
-                label="📄 Scarica Report PDF (.pdf)",
-                data=pdf_bytes,
-                file_name=f"{safe_title}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+                header_row = [Paragraph(str(col), cell_style_header) for col in df_report.columns]
+                data_matrix = [header_row]
+
+                for _, row in df_report.iterrows():
+                    row_cells = [Paragraph(str(val), cell_style_body) for val in row]
+                    data_matrix.append(row_cells)
+
+                t = Table(data_matrix)
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
+                ]))
+                elements.append(t)
+                
+                doc.build(elements)
+                pdf_bytes = pdf_buffer.getvalue()
+
+                st.download_button(
+                    label="📄 Scarica Report PDF (.pdf)",
+                    data=pdf_bytes,
+                    file_name=f"{safe_title}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+        else:
+            st.warning("⚠️ Nessun atleta selezionato per il report. Spunta almeno una riga nella tabella sovrastante.")
     else:
         st.info("Nessun atleta presente nel database per generare report.")
