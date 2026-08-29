@@ -511,153 +511,119 @@ elif st.session_state.active_tab == "Rosa Atleti":
             st.info("Nessun atleta presente in questa squadra.")
 
 st.title("📊 Generatore di Report Personalizzati")
+st.write("Seleziona esattamente i singoli campi che desideri includere nel tuo report personalizzato.")
 
-# 1. Selezione della Tipologia di Report principale
-tipo_report = st.selectbox(
-    "Seleziona la tipologia di dati da estrarre:",
-    ["Atleti & Anagrafica", "Antropometria & Salti", "Report Integrato Completo"]
-)
+# 1. Recupero dati da Supabase
+dati_atleti = db.ottieni_tutti_atleti_completi()
+dati_antropometria = db.ottieni_tutte_antropometrie_complete()
 
-st.markdown("---")
-st.subheader("⚙️ Personalizza le colonne da includere nel Report")
-
-df_esportazione = pd.DataFrame()
-
-# ---------------------------------------------------------
-# CASO 1: ATLETI & ANAGRAFICA
-# ---------------------------------------------------------
-if tipo_report == "Atleti & Anagrafica":
-    dati_atleti = db.ottieni_tutti_atleti_completi()
-    
-    if dati_atleti:
-        # Columns originali dal DB Supabase
-        # id, nome, cognome, ruolo, numero, squadra, categoria, dn, ln, cf, ind, cit, cap, naz, vis
-        cols = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
+if dati_atleti:
+    # Creazione dei dataframe base
+    cols_atl = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
                 "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita"]
-        df_full = pd.DataFrame(dati_atleti, columns=cols)
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("**Info Squadra & Ruolo**")
-            inc_squadra = st.checkbox("Squadra & Categoria", value=True)
-            inc_ruolo = st.checkbox("Ruolo & Numero Maglia", value=True)
-            
-        with col2:
-            st.markdown("**Dati Anagrafici Base**")
-            inc_nascita = st.checkbox("Data e Luogo di Nascita", value=True)
-            inc_cf = st.checkbox("Codice Fiscale", value=True)
-            inc_naz = st.checkbox("Nazionalità", value=False)
-            
-        with col3:
-            st.markdown("**Contatti & Sanità**")
-            inc_indirizzo = st.checkbox("Indirizzo, Città e CAP", value=False)
-            inc_visita = st.checkbox("Scadenza Visita Medica", value=True)
-            
-        # Selezione dinamica delle colonne
-        colonne_scelte = ["Nome", "Cognome"]
-        if inc_squadra: colonne_scelte.extend(["Squadra", "Categoria"])
-        if inc_ruolo: colonne_scelte.extend(["Ruolo", "Numero"])
-        if inc_nascita: colonne_scelte.extend(["Data Nascita", "Luogo Nascita"])
-        if inc_cf: colonne_scelte.append("Codice Fiscale")
-        if inc_naz: colonne_scelte.append("Nazionalità")
-        if inc_indirizzo: colonne_scelte.extend(["Indirizzo", "Città", "CAP"])
-        if inc_visita: colonne_scelte.append("Scadenza Visita")
-        
-        df_esportazione = df_full[colonne_scelte]
-    else:
-        st.info("Nessun atleta presente nel database.")
+    df_atl = pd.DataFrame(dati_atleti, columns=cols_atl)
 
-# ---------------------------------------------------------
-# CASO 2: ANTROPOMETRIA & SALTI
-# ---------------------------------------------------------
-elif tipo_report == "Antropometria & Salti":
-    dati_antropometria = db.ottieni_tutte_antropometrie_complete()
-    
     if dati_antropometria:
-        cols = ["ID", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
-                "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
-                "Reach Muro", "Vertec Muro", "Jump Muro"]
-        df_full = pd.DataFrame(dati_antropometria, columns=cols)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Misure Corporee**")
-            inc_struttura = st.checkbox("Altezza e Peso", value=True)
-            inc_data_ant = st.checkbox("Data Rilevazione", value=True)
-            
-        with col2:
-            st.markdown("**Test di Salto**")
-            inc_attacco = st.checkbox("Salti in Attacco (Reach, Vertec, Jump)", value=True)
-            inc_muro = st.checkbox("Salti a Muro (Reach, Vertec, Jump)", value=True)
-            
-        colonne_scelte = ["Cognome", "Nome", "Squadra"]
-        if inc_data_ant: colonne_scelte.append("Data Rilevazione")
-        if inc_struttura: colonne_scelte.extend(["Altezza", "Peso"])
-        if inc_attacco: colonne_scelte.extend(["Reach Attacco", "Vertec Attacco", "Jump Attacco"])
-        if inc_muro: colonne_scelte.extend(["Reach Muro", "Vertec Muro", "Jump Muro"])
-        
-        df_esportazione = df_full[colonne_scelte]
+        cols_ant = ["ID_Ant", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
+                    "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
+                    "Reach Muro", "Vertec Muro", "Jump Muro"]
+        df_ant = pd.DataFrame(dati_antropometria, columns=cols_ant)
+        # Unione dei dati anagrafici con le misurazioni antropometriche
+        df_merged = pd.merge(df_atl, df_ant, on=["Cognome", "Nome", "Squadra"], how="left")
     else:
-        st.info("Nessuna rilevazione antropometrica presente.")
+        df_merged = df_atl
 
-# ---------------------------------------------------------
-# CASO 3: REPORT INTEGRATO COMPLETO
-# ---------------------------------------------------------
-else:
-    dati_atleti = db.ottieni_tutti_atleti_completi()
-    dati_antropometria = db.ottieni_tutte_antropometrie_complete()
-    
-    if dati_atleti:
-        df_atl = pd.DataFrame(dati_atleti, columns=["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
-                                                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita"])
-        if dati_antropometria:
-            df_ant = pd.DataFrame(dati_antropometria, columns=["ID_Ant", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
-                                                               "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
-                                                               "Reach Muro", "Vertec Muro", "Jump Muro"])
-            # Unisci i dati dell'atleta con l'ultima antropometria
-            df_merged = pd.merge(df_atl, df_ant, on=["Cognome", "Nome", "Squadra"], how="left")
-        else:
-            df_merged = df_atl
-            
-        st.markdown("**Seleziona i blocchi di dati da includere:**")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            inc_anag = st.checkbox("Dati Anagrafici", value=True)
-        with c2:
-            inc_squadra_full = st.checkbox("Squadra & Ruolo", value=True)
-        with c3:
-            inc_salti_full = st.checkbox("Dati Antropometrici & Salti", value=True)
-            
-        cols_sel = ["Nome", "Cognome"]
-        if inc_squadra_full: cols_sel.extend(["Squadra", "Categoria", "Ruolo", "Numero"])
-        if inc_anag: cols_sel.extend(["Data Nascita", "Codice Fiscale", "Scadenza Visita"])
-        if inc_salti_full and dati_antropometria: cols_sel.extend(["Altezza", "Peso", "Jump Attacco", "Jump Muro"])
-        
-        df_esportazione = df_merged[cols_sel]
-
-# ---------------------------------------------------------
-# ANTEPRIMA ED ESPORTAZIONE
-# ---------------------------------------------------------
-if not df_esportazione.empty:
     st.markdown("---")
-    st.subheader("📋 Anteprima del Report Personalizzato")
-    st.dataframe(df_esportazione, use_container_width=True)
     
-    col_exp1, col_exp2 = st.columns(2)
-    
-    # Download Excel
-    with col_exp1:
-        output_excel = io.BytesIO()
-        with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-            df_esportazione.to_excel(writer, index=False, sheet_name='Report')
-        excel_data = output_excel.getvalue()
-        
-        st.download_button(
-            label="📥 Scarica Report in Excel",
-            data=excel_data,
-            file_name=f"report_{tipo_report.lower().replace(' ', '_')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+    # 2. Selezione granulare dei campi tramite Checkbox divise per colonne
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.markdown("### 🏐 Squadra & Ruolo")
+        inc_squadra = st.checkbox("Squadra", value=True)
+        inc_categoria = st.checkbox("Categoria", value=True)
+        inc_ruolo = st.checkbox("Ruolo", value=True)
+        inc_numero = st.checkbox("Numero Maglia", value=True)
+
+    with col2:
+        st.markdown("### 👤 Dati Anagrafici")
+        inc_dn = st.checkbox("Data di Nascita", value=False)
+        inc_ln = st.checkbox("Luogo di Nascita", value=False)
+        inc_cf = st.checkbox("Codice Fiscale", value=False)
+        inc_naz = st.checkbox("Nazionalità", value=False)
+        inc_visita = st.checkbox("Scadenza Visita Medica", value=True)
+
+    with col3:
+        st.markdown("### 🏠 Contatti")
+        inc_ind = st.checkbox("Indirizzo", value=False)
+        inc_cit = st.checkbox("Città", value=False)
+        inc_cap = st.checkbox("CAP", value=False)
+
+    with col4:
+        st.markdown("### 📏 Antropometria & Salti")
+        inc_data_ant = st.checkbox("Data Rilevazione", value=False)
+        inc_alt = st.checkbox("Altezza (cm)", value=True)
+        inc_peso = st.checkbox("Peso (kg)", value=True)
+        inc_r_att = st.checkbox("Reach Attacco", value=False)
+        inc_v_att = st.checkbox("Vertec Attacco", value=False)
+        inc_j_att = st.checkbox("Jump Attacco (Elevazione)", value=True)
+        inc_r_mur = st.checkbox("Reach Muro", value=False)
+        inc_v_mur = st.checkbox("Vertec Muro", value=False)
+        inc_j_mur = st.checkbox("Jump Muro (Elevazione)", value=True)
+
+    # 3. Costruzione dinamica della lista colonne
+    # Nome e Cognome sempre inclusi come identificativo
+    colonne_selezionate = ["Cognome", "Nome"]
+
+    # Squadra & Ruolo
+    if inc_squadra: colonne_selezionate.append("Squadra")
+    if inc_categoria: colonne_selezionate.append("Categoria")
+    if inc_ruolo: colonne_selezionate.append("Ruolo")
+    if inc_numero: colonne_selezionate.append("Numero")
+
+    # Anagrafica
+    if inc_dn: colonne_selezionate.append("Data Nascita")
+    if inc_ln: colonne_selezionate.append("Luogo Nascita")
+    if inc_cf: colonne_selezionate.append("Codice Fiscale")
+    if inc_naz: colonne_selezionate.append("Nazionalità")
+    if inc_visita: colonne_selezionate.append("Scadenza Visita")
+
+    # Contatti
+    if inc_ind: colonne_selezionate.append("Indirizzo")
+    if inc_cit: colonne_selezionate.append("Città")
+    if inc_cap: colonne_selezionate.append("CAP")
+
+    # Antropometria & Salti (se presenti)
+    if dati_antropometria:
+        if inc_data_ant: colonne_selezionate.append("Data Rilevazione")
+        if inc_alt: colonne_selezionate.append("Altezza")
+        if inc_peso: colonne_selezionate.append("Peso")
+        if inc_r_att: colonne_selezionate.append("Reach Attacco")
+        if inc_v_att: colonne_selezionate.append("Vertec Attacco")
+        if inc_j_att: colonne_selezionate.append("Jump Attacco")
+        if inc_r_mur: colonne_selezionate.append("Reach Muro")
+        if inc_v_mur: colonne_selezionate.append("Vertec Muro")
+        if inc_j_mur: colonne_selezionate.append("Jump Muro")
+
+    # 4. Filtraggio dati ed Anteprima
+    df_report = df_merged[colonne_selezionate]
+
+    st.markdown("---")
+    st.subheader(f"📋 Anteprima Report ({len(df_report)} atleti)")
+    st.dataframe(df_report, use_container_width=True)
+
+    # 5. Esportazione in Excel
+    output_excel = io.BytesIO()
+    with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+        df_report.to_excel(writer, index=False, sheet_name='Report Personalizzato')
+    excel_data = output_excel.getvalue()
+
+    st.download_button(
+        label="📥 Scarica Report Personalizzato (.xlsx)",
+        data=excel_data,
+        file_name="report_personalizzato_pallavolo.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+else:
+    st.info("Nessun atleta presente nel database per generare il report.")
