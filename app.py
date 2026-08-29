@@ -595,203 +595,131 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                             st.session_state.progr_sedute.pop(idx)
                             st.rerun()
 
-        # -------------------------------------------------------------------
-        # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO
+# -------------------------------------------------------------------
+        # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO (VERSIONE STABILE)
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Disegna traiettorie, frecce e posiziona le pedine senza perdere il campo di default.")
+            st.caption("Campo fisso di sfondo e oggetti orientabili (Pedine, Frecce, Palloni).")
 
-            import math
+            from PIL import Image, ImageDraw
             import streamlit_drawable_canvas as sdc
 
-            # CSS Inject per la visibilità permanente dei pulsanti Undo / Redo / Trash
-            st.markdown(
-                """
-                <style>
-                div[data-testid="stCanvas"] + div button,
-                div[data-testid="stCanvas"] ~ div button,
-                button[title="Undo"], button[title="Redo"], button[title="Trash"], button[title="Download"] {
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                    display: inline-block !important;
-                    filter: invert(1) brightness(2) !important;
-                    background-color: rgba(255, 255, 255, 0.2) !important;
-                    border-radius: 4px !important;
-                    margin: 2px !important;
-                }
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
+            # 1. Generatore Immagine di Sfondo del Campo (TOTALMENTE FISSO)
+            @st.cache_data
+            def get_volleyball_field_image():
+                img = Image.new("RGB", (600, 400), color="#D2691E")
+                draw = ImageDraw.Draw(img)
+                # Bordo perimetrale
+                draw.rectangle([30, 30, 570, 370], outline="white", width=4)
+                # Linea centrale / Rete
+                draw.line([(300, 30), (300, 370)], fill="white", width=4)
+                # Linee d'attacco 3 metri
+                draw.line([(210, 30), (210, 370)], fill="white", width=2)
+                draw.line([(390, 30), (390, 370)], fill="white", width=2)
+                return img
 
-            # Oggetti base del campo (linee e rettangolo campo) sempre garantiti
-            def get_linee_campo_base():
-                return [
-                    {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
-                    {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
-                    {"type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370, "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
-                    {"type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
-                    {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
-                ]
+            bg_image = get_volleyball_field_image()
 
-            # Inizializzazione session state
-            if "canvas_objects" not in st.session_state or not st.session_state.canvas_objects:
-                st.session_state.canvas_objects = get_linee_campo_base()
+            # Gestione Stato Oggetti Canvas
+            if "canvas_objects" not in st.session_state:
+                st.session_state.canvas_objects = []
 
-            if "canvas_key_counter" not in st.session_state:
-                st.session_state.canvas_key_counter = 0
-
-            def sincronizza_stato_canvas():
-                if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data is not None:
+            # Se l'utente interagisce col canvas, aggiorniamo la lista oggetti
+            def salva_stato_corrente():
+                if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data:
                     if "objects" in st.session_state.last_canvas_data:
-                        objs = st.session_state.last_canvas_data["objects"]
-                        # Assicuriamoci che le linee base rimangano inamovibili
-                        for obj in objs:
-                            if obj.get("fill") == "#D2691E" or (obj.get("stroke") == "white" and obj.get("selectable") == False):
-                                obj["selectable"] = False
-                                obj["evented"] = False
-                                obj["lockMovementX"] = True
-                                obj["lockMovementY"] = True
-                        st.session_state.canvas_objects = objs
+                        st.session_state.canvas_objects = st.session_state.last_canvas_data["objects"]
 
-            # 1. Pulsanti Pedine
-            st.write("🎯 **Inserisci Pedine sul Campo:**")
-            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7 = st.columns(7)
-            
-            def aggiungi_pedina_semicerchio(ruolo, colore_sfondo, colore_testo="#FFFFFF"):
-                sincronizza_stato_canvas()
+            # 2. Pulsantiera Inserimento Oggetti Pronti (Pedine, Frecce, Pallone)
+            st.write("📌 **Inserisci Elementi sul Campo:**")
+            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7, col_p8 = st.columns(8)
+
+            def aggiungi_gruppo_canvas(obj_json):
+                salva_stato_corrente()
+                st.session_state.canvas_objects.append(obj_json)
+                st.rerun()
+
+            def aggiungi_pedina(ruolo, colore_sfondo):
                 semicircle_path = "M 0 25 L 50 25 A 25 25 0 0 0 0 25 Z"
-                pedina_group = {
-                    "type": "group",
-                    "left": 275,
-                    "top": 185,
-                    "width": 50,
-                    "height": 30,
+                pedina = {
+                    "type": "group", "left": 275, "top": 185, "width": 50, "height": 30,
                     "objects": [
-                        {
-                            "type": "path",
-                            "path": semicircle_path,
-                            "fill": colore_sfondo,
-                            "stroke": "#FFFFFF",
-                            "strokeWidth": 2,
-                            "left": -25,
-                            "top": -15
-                        },
-                        {
-                            "type": "textbox",
-                            "text": ruolo,
-                            "fontSize": 16,
-                            "fontWeight": "bold",
-                            "fill": colore_testo,
-                            "textAlign": "center",
-                            "left": -7,
-                            "top": -8,
-                            "width": 20
-                        }
+                        {"type": "path", "path": semicircle_path, "fill": colore_sfondo, "stroke": "#FFFFFF", "strokeWidth": 2, "left": -25, "top": -15},
+                        {"type": "textbox", "text": ruolo, "fontSize": 16, "fontWeight": "bold", "fill": "#FFFFFF", "textAlign": "center", "left": -7, "top": -8, "width": 20}
                     ],
-                    "hasControls": True,
-                    "selectable": True
+                    "hasControls": True, "selectable": True
                 }
-                st.session_state.canvas_objects.append(pedina_group)
-                st.rerun()
+                aggiungi_gruppo_canvas(pedina)
 
-            if col_p1.button("➕ **A** (Alzat.)"):
-                aggiungi_pedina_semicerchio("A", "#1E90FF")
-            if col_p2.button("➕ **O** (Oppos.)"):
-                aggiungi_pedina_semicerchio("O", "#FF4500")
-            if col_p3.button("➕ **S** (Schiac.)"):
-                aggiungi_pedina_semicerchio("S", "#2E8B57")
-            if col_p4.button("➕ **C** (Centr.)"):
-                aggiungi_pedina_semicerchio("C", "#8A2BE2")
-            if col_p5.button("➕ **L** (Liber.)"):
-                aggiungi_pedina_semicerchio("L", "#FFA500")
-            if col_p6.button("➕ **T** (Tecni.)"):
-                aggiungi_pedina_semicerchio("T", "#333333")
-            if col_p7.button("🔄 **Pulisci Campo**"):
-                # Reset agli oggetti base + cambio key per forzare il refresh completo del componente
-                st.session_state.canvas_objects = get_linee_campo_base()
-                st.session_state.last_canvas_data = None
-                st.session_state.canvas_key_counter += 1
-                st.rerun()
+            def aggiungi_freccia_oggetto(colore="#FFFF00"):
+                # Freccia pronta (asta + punta) che l'utente può ruotare/ridimensionare a piacere
+                freccia = {
+                    "type": "group", "left": 250, "top": 180, "width": 100, "height": 30,
+                    "objects": [
+                        {"type": "line", "x1": -50, "y1": 0, "x2": 35, "y2": 0, "stroke": colore, "strokeWidth": 5},
+                        {"type": "polygon", "points": [{"x": 35, "y": -10}, {"x": 50, "y": 0}, {"x": 35, "y": 10}], "fill": colore}
+                    ],
+                    "hasControls": True, "selectable": True
+                }
+                aggiungi_gruppo_canvas(freccia)
 
-            # 2. Menu Selezione Strumenti
+            def aggiungi_pallone():
+                palla = {
+                    "type": "circle", "left": 285, "top": 185, "radius": 12,
+                    "fill": "#FFD700", "stroke": "#000000", "strokeWidth": 2,
+                    "hasControls": True, "selectable": True
+                }
+                aggiungi_gruppo_canvas(palla)
+
+            if col_p1.button("➕ **A**"): aggiungi_pedina("A", "#1E90FF")
+            if col_p2.button("➕ **O**"): aggiungi_pedina("O", "#FF4500")
+            if col_p3.button("➕ **S**"): aggiungi_pedina("S", "#2E8B57")
+            if col_p4.button("➕ **C**"): aggiungi_pedina("C", "#8A2BE2")
+            if col_p5.button("➕ **L**"): aggiungi_pedina("L", "#FFA500")
+            if col_p6.button("➕ **T**"): aggiungi_pedina("T", "#333333")
+            if col_p7.button("➡️ **Freccia**"): aggiungi_freccia_oggetto()
+            if col_p8.button("🏐 **Palla**"): aggiungi_pallone()
+
+            # 3. Controlli Disegno Manuale e Opzioni Canvas
             col_tools, col_space = st.columns([3, 1])
             with col_tools:
                 strumenti_map = {
-                    "Sposta / Trascina / Ruota": "transform",
-                    "Disegna Traiettoria (Mano libera)": "freedraw",
-                    "Freccia Direzionale": "line_arrow",
+                    "Sposta / Ruota / Ridimensiona": "transform",
+                    "Disegno Libero (Mano libera)": "freedraw",
                     "Linea Retta": "line",
-                    "Cerchio / Pallone": "circle",
+                    "Cerchio / Zona": "circle",
                     "Rettangolo / Zona": "rect"
                 }
-                c_t1, c_t2, c_t3 = st.columns(3)
+                c_t1, c_t2, c_t3, c_t4 = st.columns(4)
                 with c_t1:
                     strumento_scelto = st.selectbox("Modalità:", list(strumenti_map.keys()), key="draw_mode_label")
-                    raw_mode = strumenti_map[strumento_scelto]
-                    drawing_mode = "line" if raw_mode == "line_arrow" else raw_mode
-
+                    drawing_mode = strumenti_map[strumento_scelto]
                 with c_t2:
-                    stroke_color = st.color_picker("Colore tratto:", "#FFFF00", key="stroke_clr")
+                    stroke_color = st.color_picker("Colore:", "#FFFF00", key="stroke_clr")
                 with c_t3:
-                    stroke_width = st.slider("Spessore tratto:", 1, 10, 3, key="stroke_w")
+                    stroke_width = st.slider("Spessore:", 1, 10, 3, key="stroke_w")
+                with c_t4:
+                    if st.button("🔄 **Pulisci Tutto**", type="secondary"):
+                        st.session_state.canvas_objects = []
+                        st.session_state.last_canvas_data = None
+                        st.rerun()
 
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
-                # Gestione tracciamento Punta Freccia Direzionale
-                if raw_mode == "line_arrow" and "last_canvas_data" in st.session_state and st.session_state.last_canvas_data:
-                    objs = st.session_state.last_canvas_data.get("objects", [])
-                    if objs:
-                        last_obj = objs[-1]
-                        if last_obj.get("type") == "line" and not last_obj.get("is_arrow_processed"):
-                            last_obj["is_arrow_processed"] = True
-                            
-                            x1 = last_obj.get("x1", 0)
-                            y1 = last_obj.get("y1", 0)
-                            x2 = last_obj.get("x2", 0)
-                            y2 = last_obj.get("y2", 0)
-                            
-                            dist = math.hypot(x2 - x1, y2 - y1)
-                            if dist > 5:
-                                angle = math.atan2(y2 - y1, x2 - x1)
-                                head_len = max(14, stroke_width * 3.5)
-                                
-                                p1_x = x2 - head_len * math.cos(angle - math.pi / 6)
-                                p1_y = y2 - head_len * math.sin(angle - math.pi / 6)
-                                p2_x = x2 - head_len * math.cos(angle + math.pi / 6)
-                                p2_y = y2 - head_len * math.sin(angle + math.pi / 6)
-                                
-                                arrow_head = {
-                                    "type": "polygon",
-                                    "points": [
-                                        {"x": x2, "y": y2},
-                                        {"x": p1_x, "y": p1_y},
-                                        {"x": p2_x, "y": p2_y}
-                                    ],
-                                    "fill": stroke_color,
-                                    "stroke": stroke_color,
-                                    "strokeWidth": 1
-                                }
-                                st.session_state.canvas_objects = objs + [arrow_head]
-                                st.rerun()
-
                 initial_json = {"objects": st.session_state.canvas_objects}
-
-                # La chiave dinamica forza il redraw pulito mantenendo le linee quando si clicca Reset
-                canvas_key = f"volleyball_canvas_v9_{st.session_state.canvas_key_counter}"
 
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 255, 255, 0.2)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_color="#D2691E",
+                    background_image=bg_image,
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
                     initial_drawing=initial_json,
-                    key=canvas_key
+                    key="volleyball_board_v10"
                 )
 
                 if canvas_result and canvas_result.json_data:
@@ -816,6 +744,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
+
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
