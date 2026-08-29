@@ -600,13 +600,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Disegna traiettorie, frecce e posiziona le pedine. Il campo di sfondo è completamente fisso.")
+            st.caption("Disegna traiettorie, frecce e posiziona le pedine senza perdere il campo di default.")
 
             import math
-            from PIL import Image, ImageDraw
             import streamlit_drawable_canvas as sdc
 
-            # CSS Inject per garantire la visibilità costante dei pulsanti Undo / Redo / Trash
+            # CSS Inject per la visibilità permanente dei pulsanti Undo / Redo / Trash
             st.markdown(
                 """
                 <style>
@@ -626,30 +625,35 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 unsafe_allow_html=True
             )
 
-            # Generatore statico del campo da pallavolo come immagine di sfondo (INAMOVIBILE)
-            @st.cache_data
-            def genera_campo_pallavolo_bg():
-                img = Image.new("RGB", (600, 400), color="#D2691E")
-                draw = ImageDraw.Draw(img)
-                # Bordo perimetrale
-                draw.rectangle([30, 30, 570, 370], outline="white", width=4)
-                # Linea centrale (rete)
-                draw.line([(300, 30), (300, 370)], fill="white", width=4)
-                # Linee d'attacco (3 metri)
-                draw.line([(210, 30), (210, 370)], fill="white", width=2)
-                draw.line([(390, 30), (390, 370)], fill="white", width=2)
-                return img
+            # Oggetti base del campo (linee e rettangolo campo) sempre garantiti
+            def get_linee_campo_base():
+                return [
+                    {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
+                    {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
+                    {"type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370, "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
+                    {"type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
+                    {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
+                ]
 
-            campo_bg_img = genera_campo_pallavolo_bg()
+            # Inizializzazione session state
+            if "canvas_objects" not in st.session_state or not st.session_state.canvas_objects:
+                st.session_state.canvas_objects = get_linee_campo_base()
 
-            # Inizializzazione oggetti canvas (parte vuoto, le linee sono nello sfondo!)
-            if "canvas_objects" not in st.session_state:
-                st.session_state.canvas_objects = []
+            if "canvas_key_counter" not in st.session_state:
+                st.session_state.canvas_key_counter = 0
 
             def sincronizza_stato_canvas():
                 if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data is not None:
                     if "objects" in st.session_state.last_canvas_data:
-                        st.session_state.canvas_objects = st.session_state.last_canvas_data["objects"]
+                        objs = st.session_state.last_canvas_data["objects"]
+                        # Assicuriamoci che le linee base rimangano inamovibili
+                        for obj in objs:
+                            if obj.get("fill") == "#D2691E" or (obj.get("stroke") == "white" and obj.get("selectable") == False):
+                                obj["selectable"] = False
+                                obj["evented"] = False
+                                obj["lockMovementX"] = True
+                                obj["lockMovementY"] = True
+                        st.session_state.canvas_objects = objs
 
             # 1. Pulsanti Pedine
             st.write("🎯 **Inserisci Pedine sul Campo:**")
@@ -705,8 +709,10 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             if col_p6.button("➕ **T** (Tecni.)"):
                 aggiungi_pedina_semicerchio("T", "#333333")
             if col_p7.button("🔄 **Pulisci Campo**"):
-                st.session_state.canvas_objects = []
+                # Reset agli oggetti base + cambio key per forzare il refresh completo del componente
+                st.session_state.canvas_objects = get_linee_campo_base()
                 st.session_state.last_canvas_data = None
+                st.session_state.canvas_key_counter += 1
                 st.rerun()
 
             # 2. Menu Selezione Strumenti
@@ -734,7 +740,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
-                # Se è stata tracciata una linea in modalità "Freccia Direzionale", calcoliamo la punta triangolare
+                # Gestione tracciamento Punta Freccia Direzionale
                 if raw_mode == "line_arrow" and "last_canvas_data" in st.session_state and st.session_state.last_canvas_data:
                     objs = st.session_state.last_canvas_data.get("objects", [])
                     if objs:
@@ -748,7 +754,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                             y2 = last_obj.get("y2", 0)
                             
                             dist = math.hypot(x2 - x1, y2 - y1)
-                            if dist > 5:  # Evita di applicare la punta su semplici click
+                            if dist > 5:
                                 angle = math.atan2(y2 - y1, x2 - x1)
                                 head_len = max(14, stroke_width * 3.5)
                                 
@@ -773,16 +779,19 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
 
                 initial_json = {"objects": st.session_state.canvas_objects}
 
+                # La chiave dinamica forza il redraw pulito mantenendo le linee quando si clicca Reset
+                canvas_key = f"volleyball_canvas_v9_{st.session_state.canvas_key_counter}"
+
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 255, 255, 0.2)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_image=campo_bg_img,
+                    background_color="#D2691E",
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
                     initial_drawing=initial_json,
-                    key="volleyball_canvas_v8"
+                    key=canvas_key
                 )
 
                 if canvas_result and canvas_result.json_data:
@@ -807,7 +816,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
-
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
