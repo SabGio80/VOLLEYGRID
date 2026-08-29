@@ -594,43 +594,54 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         if is_admin and st.button(f"🗑️ Elimina {seduta['Seduta']}", key=f"del_sed_{idx}"):
                             st.session_state.progr_sedute.pop(idx)
                             st.rerun()
-
-        # -------------------------------------------------------------------
+# -------------------------------------------------------------------
         # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Campo di sfondo fisso e indelebile. Frecce dritte, curve e colori personalizzabili.")
+            st.caption("Campo di sfondo fisso, frecce dritte/curve orientabili e colori personalizzabili.")
 
-            import io
-            import math
-            from PIL import Image, ImageDraw
             import streamlit_drawable_canvas as sdc
 
-            # Genera un'immagine PIL del campo da pallavolo
-            def get_volleyball_field_image():
-                img = Image.new("RGB", (600, 400), color="#D2691E")
-                draw = ImageDraw.Draw(img)
-                # Bordo perimetrale
-                draw.rectangle([30, 30, 570, 370], outline="white", width=4)
-                # Linea centrale (rete)
-                draw.line([(300, 30), (300, 370)], fill="white", width=4)
-                # Linee d'attacco 3 metri
-                draw.line([(210, 30), (210, 370)], fill="white", width=2)
-                draw.line([(390, 30), (390, 370)], fill="white", width=2)
-                return img
+            # Oggetti base che compongono il campo da pallavolo (vettoriali)
+            def get_volleyball_court_objects():
+                return [
+                    # Sfondo arancione del campo
+                    {
+                        "type": "rect", "left": 30, "top": 30, "width": 540, "height": 340,
+                        "fill": "#D2691E", "stroke": "white", "strokeWidth": 4,
+                        "selectable": False, "evented": False
+                    },
+                    # Linea centrale (Rete)
+                    {
+                        "type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370,
+                        "stroke": "white", "strokeWidth": 4,
+                        "selectable": False, "evented": False
+                    },
+                    # Linea attacco sinistra (3m)
+                    {
+                        "type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370,
+                        "stroke": "white", "strokeWidth": 2,
+                        "selectable": False, "evented": False
+                    },
+                    # Linea attacco destra (3m)
+                    {
+                        "type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370,
+                        "stroke": "white", "strokeWidth": 2,
+                        "selectable": False, "evented": False
+                    }
+                ]
 
-            # Inizializzazione session state
-            if "canvas_objects" not in st.session_state:
-                st.session_state.canvas_objects = []
-
-            if "canvas_key_counter" not in st.session_state:
-                st.session_state.canvas_key_counter = 0
+            # Inizializzazione degli oggetti nel session_state con il campo di default
+            if "canvas_user_objects" not in st.session_state:
+                st.session_state.canvas_user_objects = []
 
             def salva_stato_corrente():
                 if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data:
                     if "objects" in st.session_state.last_canvas_data:
-                        st.session_state.canvas_objects = st.session_state.last_canvas_data["objects"]
+                        # Salva solo gli oggetti aggiunti dall'utente (escludendo i primi 4 del campo)
+                        all_objs = st.session_state.last_canvas_data["objects"]
+                        st.session_state.canvas_user_objects = all_objs[4:] if len(all_objs) >= 4 else []
 
             # Controlli Strumenti e Colore
             col_tools, col_space = st.columns([3, 1])
@@ -657,7 +668,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
 
             def aggiungi_gruppo_canvas(obj_json):
                 salva_stato_corrente()
-                st.session_state.canvas_objects.append(obj_json)
+                st.session_state.canvas_user_objects.append(obj_json)
                 st.rerun()
 
             def aggiungi_pedina(ruolo, colore_sfondo):
@@ -672,7 +683,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 }
                 aggiungi_gruppo_canvas(pedina)
 
-            # Freccia Dritta orientabile
+            # Freccia Dritta orientabile con colore dinamico
             def aggiungi_freccia_dritta(colore):
                 freccia = {
                     "type": "group", "left": 250, "top": 180, "width": 100, "height": 30,
@@ -684,7 +695,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 }
                 aggiungi_gruppo_canvas(freccia)
 
-            # Freccia Curva orientabile
+            # Freccia Curva orientabile con colore dinamico
             def aggiungi_freccia_curva(colore):
                 path_curvo = "M 0 50 Q 40 -20 80 20"
                 freccia_curva = {
@@ -715,30 +726,27 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             if col_p8.button("↪️ **Fr. Curva**"): aggiungi_freccia_curva(stroke_color)
             if col_p9.button("🏐 **Palla**"): aggiungi_pallone()
             if col_p10.button("🔄 **Pulisci**"):
-                st.session_state.canvas_objects = []
+                st.session_state.canvas_user_objects = []
                 st.session_state.last_canvas_data = None
-                st.session_state.canvas_key_counter += 1
                 st.rerun()
 
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
-                initial_json = {"objects": st.session_state.canvas_objects}
-                bg_img_pil = get_volleyball_field_image()
-
-                # Key dinamico per forzare il refresh pulito mantenendo lo sfondo PIL
-                canvas_key = f"volleyball_board_v13_{st.session_state.canvas_key_counter}"
+                # Uniamo gli oggetti del campo fissa agli oggetti aggiunti dall'utente
+                full_canvas_objects = get_volleyball_court_objects() + st.session_state.canvas_user_objects
+                initial_json = {"objects": full_canvas_objects}
 
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 255, 255, 0.2)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_image=bg_img_pil,
+                    background_color="#1E1E1E",
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
                     initial_drawing=initial_json,
-                    key=canvas_key
+                    key="volleyball_board_v14"
                 )
 
                 if canvas_result and canvas_result.json_data:
@@ -763,6 +771,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
+
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
