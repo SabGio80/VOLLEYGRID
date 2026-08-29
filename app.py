@@ -599,11 +599,11 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Disegna traiettorie, frecce e posiziona le pedine mantenendo i disegni esistenti.")
+            st.caption("Disegna traiettorie, inserisci frecce e posiziona le pedine mantenendo i disegni esistenti.")
 
             import streamlit_drawable_canvas as sdc
 
-            # 1. Inizializzazione degli oggetti base del campo (se non esistono già)
+            # 1. Inizializzazione degli oggetti base del campo
             if "canvas_objects" not in st.session_state:
                 st.session_state.canvas_objects = [
                     {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False},
@@ -613,16 +613,18 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
                 ]
 
-            # 2. Controlli per aggiungere le pedine senza cancellare i disegni precedenti
-            st.write("🎯 **Aggiungi Pedine sul Campo (Semicerchi):**")
-            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7 = st.columns(7)
-            
-            def aggiungi_pedina_semicerchio(ruolo, colore_sfondo, colore_testo="#FFFFFF"):
-                # Se l'utente ha fatto disegni o spostamenti, salviamo prima lo stato attuale!
+            # Sincronizza lo stato corrente del canvas prima di aggiungere elementi
+            def aggiorna_stato_canvas():
                 if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data is not None:
                     if "objects" in st.session_state.last_canvas_data:
                         st.session_state.canvas_objects = st.session_state.last_canvas_data["objects"]
 
+            # 2. Controlli per aggiungere le pedine e frecce
+            st.write("🎯 **Inserisci Elementi sul Campo:**")
+            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7, col_p8 = st.columns(8)
+            
+            def aggiungi_pedina_semicerchio(ruolo, colore_sfondo, colore_testo="#FFFFFF"):
+                aggiorna_stato_canvas()
                 semicircle_path = "M 0 25 L 50 25 A 25 25 0 0 0 0 25 Z"
                 pedina_group = {
                     "type": "group",
@@ -658,19 +660,40 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 st.session_state.canvas_objects.append(pedina_group)
                 st.rerun()
 
-            if col_p1.button("➕ **A** (Alzatore)"):
+            def aggiungi_freccia():
+                aggiorna_stato_canvas()
+                # Creiamo una freccia orientabile composta da asticella e punta
+                freccia_group = {
+                    "type": "group",
+                    "left": 260,
+                    "top": 190,
+                    "width": 80,
+                    "height": 20,
+                    "objects": [
+                        {"type": "line", "x1": -40, "y1": 0, "x2": 30, "y2": 0, "stroke": "#FFFF00", "strokeWidth": 4},
+                        {"type": "polygon", "points": [{"x": 30, "y": -8}, {"x": 45, "y": 0}, {"x": 30, "y": 8}], "fill": "#FFFF00"}
+                    ],
+                    "hasControls": True,
+                    "selectable": True
+                }
+                st.session_state.canvas_objects.append(freccia_group)
+                st.rerun()
+
+            if col_p1.button("➕ **A** (Alzat.)"):
                 aggiungi_pedina_semicerchio("A", "#1E90FF")
-            if col_p2.button("➕ **O** (Opposto)"):
+            if col_p2.button("➕ **O** (Oppos.)"):
                 aggiungi_pedina_semicerchio("O", "#FF4500")
-            if col_p3.button("➕ **S** (Schiacc.)"):
+            if col_p3.button("➕ **S** (Schiac.)"):
                 aggiungi_pedina_semicerchio("S", "#2E8B57")
-            if col_p4.button("➕ **C** (Centrale)"):
+            if col_p4.button("➕ **C** (Centr.)"):
                 aggiungi_pedina_semicerchio("C", "#8A2BE2")
-            if col_p5.button("➕ **L** (Libero)"):
+            if col_p5.button("➕ **L** (Liber.)"):
                 aggiungi_pedina_semicerchio("L", "#FFA500")
-            if col_p6.button("➕ **T** (Tecnico)"):
+            if col_p6.button("➕ **T** (Tecni.)"):
                 aggiungi_pedina_semicerchio("T", "#333333")
-            if col_p7.button("🔄 **Reset Campo**"):
+            if col_p7.button("➡️ **Freccia**"):
+                aggiungi_freccia()
+            if col_p8.button("🔄 **Reset**"):
                 st.session_state.canvas_objects = [
                     {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False},
                     {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False},
@@ -681,13 +704,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 st.session_state.last_canvas_data = None
                 st.rerun()
 
-            # 3. Selezione strumenti di disegno (inclusa la modalità Freccia)
+            # 3. Selezione strumenti di disegno (modalità valide per st_canvas)
             col_tools, col_space = st.columns([3, 1])
             with col_tools:
                 strumenti_map = {
-                    "Sposta / Trascina pedine": "transform",
+                    "Sposta / Trascina / Ruota": "transform",
                     "Disegna Traiettoria (Mano libera)": "freedraw",
-                    "Freccia (Spostamento/Palla)": "arrow",
                     "Linea Retta": "line",
                     "Cerchio / Pallone": "circle",
                     "Rettangolo / Zona": "rect"
@@ -715,7 +737,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     width=600,
                     drawing_mode=drawing_mode,
                     initial_drawing=initial_json,
-                    key="volleyball_canvas_v4"
+                    key="volleyball_canvas_v5"
                 )
 
                 # Salviamo lo stato corrente ad ogni interazione
@@ -741,7 +763,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
-
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
