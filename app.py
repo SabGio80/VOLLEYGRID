@@ -461,9 +461,9 @@ elif st.session_state.active_tab == "Reportistica":
                         "Reach Muro", "Vertec Muro", "Jump Muro"]
             df_ant = pd.DataFrame(dati_antropometria, columns=cols_ant)
             
-            # Calcolo dei Differenziali
-            df_ant["Diff. Attacco"] = pd.to_numeric(df_ant["Jump Attacco"], errors='coerce') - pd.to_numeric(df_ant["Reach Attacco"], errors='coerce')
-            df_ant["Diff. Muro"] = pd.to_numeric(df_ant["Jump Muro"], errors='coerce') - pd.to_numeric(df_ant["Reach Muro"], errors='coerce')
+            # Calcolo dei Differenziali Corretti:
+            # Jump Attacco e Jump Muro rappresentano l'elevazione netta (Vertec - Reach)
+            df_ant["Diff. Salti (Att. - Muro)"] = pd.to_numeric(df_ant["Jump Attacco"], errors='coerce') - pd.to_numeric(df_ant["Jump Muro"], errors='coerce')
             
             # Unione dati
             df_merged = pd.merge(df_atl, df_ant, on=["Cognome", "Nome", "Squadra"], how="left")
@@ -515,11 +515,10 @@ elif st.session_state.active_tab == "Reportistica":
             inc_r_att = st.checkbox("Reach Attacco", value=False)
             inc_v_att = st.checkbox("Vertec Attacco", value=False)
             inc_j_att = st.checkbox("Jump Attacco", value=True)
-            inc_d_att = st.checkbox("Diff. Attacco (Elevazione)", value=True)
             inc_r_mur = st.checkbox("Reach Muro", value=False)
             inc_v_mur = st.checkbox("Vertec Muro", value=False)
             inc_j_mur = st.checkbox("Jump Muro", value=True)
-            inc_d_mur = st.checkbox("Diff. Muro (Elevazione)", value=True)
+            inc_d_salti = st.checkbox("Diff. Salti (Attacco - Muro)", value=True)
 
         # Costruzione lista colonne
         colonne_selezionate = ["Cognome", "Nome"]
@@ -546,11 +545,10 @@ elif st.session_state.active_tab == "Reportistica":
             if inc_r_att: colonne_selezionate.append("Reach Attacco")
             if inc_v_att: colonne_selezionate.append("Vertec Attacco")
             if inc_j_att: colonne_selezionate.append("Jump Attacco")
-            if inc_d_att: colonne_selezionate.append("Diff. Attacco")
             if inc_r_mur: colonne_selezionate.append("Reach Muro")
             if inc_v_mur: colonne_selezionate.append("Vertec Muro")
             if inc_j_mur: colonne_selezionate.append("Jump Muro")
-            if inc_d_mur: colonne_selezionate.append("Diff. Muro")
+            if inc_d_salti: colonne_selezionate.append("Diff. Salti (Att. - Muro)")
 
         df_report = df_merged[colonne_selezionate].fillna("-")
 
@@ -595,19 +593,39 @@ elif st.session_state.active_tab == "Reportistica":
             )
             elements.append(Paragraph(report_title, title_style))
 
-            data_matrix = [list(df_report.columns)]
+            cell_style_header = ParagraphStyle(
+                'HeaderStyle',
+                parent=styles['Normal'],
+                fontName='Helvetica-Bold',
+                fontSize=8,
+                textColor=colors.whitesmoke,
+                alignment=1
+            )
+
+            cell_style_body = ParagraphStyle(
+                'BodyStyle',
+                parent=styles['Normal'],
+                fontName='Helvetica',
+                fontSize=7,
+                textColor=colors.black,
+                alignment=1
+            )
+
+            # Inseriamo i Paragraph nelle celle per garantire il text-wrapping
+            header_row = [Paragraph(str(col), cell_style_header) for col in df_report.columns]
+            data_matrix = [header_row]
+
             for _, row in df_report.iterrows():
-                data_matrix.append([str(val) for val in row])
+                row_cells = [Paragraph(str(val), cell_style_body) for val in row]
+                data_matrix.append(row_cells)
 
             t = Table(data_matrix)
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-                ('TOPPADDING', (0, 0), (-1, 0), 6),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
             ]))
