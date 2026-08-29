@@ -595,24 +595,26 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                             st.session_state.progr_sedute.pop(idx)
                             st.rerun()
 
-# -------------------------------------------------------------------
-        # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO (VERSIONE STABILE)
+        # -------------------------------------------------------------------
+        # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Campo fisso di sfondo e oggetti orientabili (Pedine, Frecce, Palloni).")
+            st.caption("Campo di sfondo fisso e indelebile. Frecce dritte, curve e colori personalizzabili.")
 
+            import io
+            import base64
             from PIL import Image, ImageDraw
             import streamlit_drawable_canvas as sdc
 
-            # 1. Generatore Immagine di Sfondo del Campo (TOTALMENTE FISSO)
+            # Genera un'immagine Base64 per garantire che il campo rimanga SEMPRE visibile dopo il reset
             @st.cache_data
             def get_volleyball_field_image():
                 img = Image.new("RGB", (600, 400), color="#D2691E")
                 draw = ImageDraw.Draw(img)
                 # Bordo perimetrale
                 draw.rectangle([30, 30, 570, 370], outline="white", width=4)
-                # Linea centrale / Rete
+                # Linea centrale (rete)
                 draw.line([(300, 30), (300, 370)], fill="white", width=4)
                 # Linee d'attacco 3 metri
                 draw.line([(210, 30), (210, 370)], fill="white", width=2)
@@ -621,19 +623,36 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
 
             bg_image = get_volleyball_field_image()
 
-            # Gestione Stato Oggetti Canvas
             if "canvas_objects" not in st.session_state:
                 st.session_state.canvas_objects = []
 
-            # Se l'utente interagisce col canvas, aggiorniamo la lista oggetti
             def salva_stato_corrente():
                 if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data:
                     if "objects" in st.session_state.last_canvas_data:
                         st.session_state.canvas_objects = st.session_state.last_canvas_data["objects"]
 
-            # 2. Pulsantiera Inserimento Oggetti Pronti (Pedine, Frecce, Pallone)
+            # Controlli Strumenti e Colore
+            col_tools, col_space = st.columns([3, 1])
+            with col_tools:
+                strumenti_map = {
+                    "Sposta / Ruota / Ridimensiona": "transform",
+                    "Disegno Libero (Mano libera)": "freedraw",
+                    "Linea Retta": "line",
+                    "Cerchio / Zona": "circle",
+                    "Rettangolo / Zona": "rect"
+                }
+                c_t1, c_t2, c_t3 = st.columns(3)
+                with c_t1:
+                    strumento_scelto = st.selectbox("Modalità:", list(strumenti_map.keys()), key="draw_mode_label")
+                    drawing_mode = strumenti_map[strumento_scelto]
+                with c_t2:
+                    stroke_color = st.color_picker("Colore elementi/frecce:", "#FFFF00", key="stroke_clr")
+                with c_t3:
+                    stroke_width = st.slider("Spessore:", 1, 10, 3, key="stroke_w")
+
+            # Pulsantiera Oggetti
             st.write("📌 **Inserisci Elementi sul Campo:**")
-            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7, col_p8 = st.columns(8)
+            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7, col_p8, col_p9, col_p10 = st.columns(10)
 
             def aggiungi_gruppo_canvas(obj_json):
                 salva_stato_corrente()
@@ -652,8 +671,8 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 }
                 aggiungi_gruppo_canvas(pedina)
 
-            def aggiungi_freccia_oggetto(colore="#FFFF00"):
-                # Freccia pronta (asta + punta) che l'utente può ruotare/ridimensionare a piacere
+            # Freccia Dritta con colore dinamico
+            def aggiungi_freccia_dritta(colore):
                 freccia = {
                     "type": "group", "left": 250, "top": 180, "width": 100, "height": 30,
                     "objects": [
@@ -663,6 +682,20 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     "hasControls": True, "selectable": True
                 }
                 aggiungi_gruppo_canvas(freccia)
+
+            # Freccia Curva con colore dinamico
+            def aggiungi_freccia_curva(colore):
+                # Percorso ad arco di Bézier
+                path_curvo = "M 0 50 Q 40 -20 80 20"
+                freccia_curva = {
+                    "type": "group", "left": 250, "top": 170, "width": 100, "height": 60,
+                    "objects": [
+                        {"type": "path", "path": path_curvo, "fill": "transparent", "stroke": colore, "strokeWidth": 5, "left": -40, "top": -25},
+                        {"type": "polygon", "points": [{"x": 32, "y": -3}, {"x": 48, "y": 5}, {"x": 38, "y": 18}], "fill": colore}
+                    ],
+                    "hasControls": True, "selectable": True
+                }
+                aggiungi_gruppo_canvas(freccia_curva)
 
             def aggiungi_pallone():
                 palla = {
@@ -678,32 +711,13 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             if col_p4.button("➕ **C**"): aggiungi_pedina("C", "#8A2BE2")
             if col_p5.button("➕ **L**"): aggiungi_pedina("L", "#FFA500")
             if col_p6.button("➕ **T**"): aggiungi_pedina("T", "#333333")
-            if col_p7.button("➡️ **Freccia**"): aggiungi_freccia_oggetto()
-            if col_p8.button("🏐 **Palla**"): aggiungi_pallone()
-
-            # 3. Controlli Disegno Manuale e Opzioni Canvas
-            col_tools, col_space = st.columns([3, 1])
-            with col_tools:
-                strumenti_map = {
-                    "Sposta / Ruota / Ridimensiona": "transform",
-                    "Disegno Libero (Mano libera)": "freedraw",
-                    "Linea Retta": "line",
-                    "Cerchio / Zona": "circle",
-                    "Rettangolo / Zona": "rect"
-                }
-                c_t1, c_t2, c_t3, c_t4 = st.columns(4)
-                with c_t1:
-                    strumento_scelto = st.selectbox("Modalità:", list(strumenti_map.keys()), key="draw_mode_label")
-                    drawing_mode = strumenti_map[strumento_scelto]
-                with c_t2:
-                    stroke_color = st.color_picker("Colore:", "#FFFF00", key="stroke_clr")
-                with c_t3:
-                    stroke_width = st.slider("Spessore:", 1, 10, 3, key="stroke_w")
-                with c_t4:
-                    if st.button("🔄 **Pulisci Tutto**", type="secondary"):
-                        st.session_state.canvas_objects = []
-                        st.session_state.last_canvas_data = None
-                        st.rerun()
+            if col_p7.button("➡️ **Fr. Dritta**"): aggiungi_freccia_dritta(stroke_color)
+            if col_p8.button("↪️ **Fr. Curva**"): aggiungi_freccia_curva(stroke_color)
+            if col_p9.button("🏐 **Palla**"): aggiungi_pallone()
+            if col_p10.button("🔄 **Pulisci**"):
+                st.session_state.canvas_objects = []
+                st.session_state.last_canvas_data = None
+                st.rerun()
 
             col_canv, col_info_ex = st.columns([3, 2])
 
@@ -719,7 +733,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     width=600,
                     drawing_mode=drawing_mode,
                     initial_drawing=initial_json,
-                    key="volleyball_board_v10"
+                    key="volleyball_board_v11"
                 )
 
                 if canvas_result and canvas_result.json_data:
@@ -744,7 +758,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
-
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
