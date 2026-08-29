@@ -667,6 +667,6 @@ elif st.session_state.active_tab == "Reportistica":
                     use_container_width=True
                 )
         else:
-            st.warning("⚠️ Nessun atleta selezionato per il report. Spunta almeno una riga nella tabella sovrastante.")
+            st.warning("Nessun atleta selezionato per la generazione del report.")
     else:
-        st.info("Nessun atleta presente nel database per generare report.")
+        st.info("Nessun dato disponibile per generare i report.")
