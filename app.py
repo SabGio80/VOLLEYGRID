@@ -450,7 +450,7 @@ elif st.session_state.active_tab == "Reportistica":
 
     if dati_atleti:
         cols_atl = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
-                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita", "Telefono"]
+                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita", "Telefono", "Email"]
         
         df_atl = pd.DataFrame(dati_atleti)
         if df_atl.shape[1] == len(cols_atl):
@@ -461,7 +461,7 @@ elif st.session_state.active_tab == "Reportistica":
             df_atl = df_atl.iloc[:, :len(cols_fallback)]
             df_atl.columns = cols_fallback
             df_atl["Telefono"] = "-"
-
+            df_atl["Email"] = "-"
         if dati_antropometria:
             cols_ant = ["ID_Ant", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
                         "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
@@ -503,6 +503,7 @@ elif st.session_state.active_tab == "Reportistica":
 
         with col3:
             st.markdown("### 🏠 Contatti")
+            inc_email = st.checkbox("Email", value=False)
             inc_tel = st.checkbox("Telefono / Cellulare", value=True)
             inc_ind = st.checkbox("Indirizzo", value=False)
             inc_cit = st.checkbox("Città", value=False)
@@ -533,7 +534,8 @@ elif st.session_state.active_tab == "Reportistica":
         if inc_cf: colonne_selezionate.append("Codice Fiscale")
         if inc_naz: colonne_selezionate.append("Nazionalità")
         if inc_visita: colonne_selezionate.append("Scadenza Visita")
-
+        
+        if inc_email: colonne_selezionate.append("Email")
         if inc_tel: colonne_selezionate.append("Telefono")
         if inc_ind: colonne_selezionate.append("Indirizzo")
         if inc_cit: colonne_selezionate.append("Città")
