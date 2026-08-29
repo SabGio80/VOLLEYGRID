@@ -595,41 +595,37 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                             st.session_state.progr_sedute.pop(idx)
                             st.rerun()
 
-# -------------------------------------------------------------------
+        # -------------------------------------------------------------------
         # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Campo di sfondo fisso in Base64. Frecce dritte, curve e colori personalizzabili.")
+            st.caption("Campo di sfondo fisso e indelebile. Frecce dritte, curve e colori personalizzabili.")
 
             import io
-            import base64
+            import math
             from PIL import Image, ImageDraw
             import streamlit_drawable_canvas as sdc
 
-            # Genera il campo da pallavolo e lo converte in Base64 per la compatibilità con st_canvas
-            @st.cache_data
-            def get_volleyball_field_base64():
+            # Genera un'immagine PIL del campo da pallavolo
+            def get_volleyball_field_image():
                 img = Image.new("RGB", (600, 400), color="#D2691E")
                 draw = ImageDraw.Draw(img)
-                # Bordo perimetrale campo
+                # Bordo perimetrale
                 draw.rectangle([30, 30, 570, 370], outline="white", width=4)
-                # Linea centrale / Rete
+                # Linea centrale (rete)
                 draw.line([(300, 30), (300, 370)], fill="white", width=4)
-                # Linee d'attacco (3 metri)
+                # Linee d'attacco 3 metri
                 draw.line([(210, 30), (210, 370)], fill="white", width=2)
                 draw.line([(390, 30), (390, 370)], fill="white", width=2)
+                return img
 
-                # Conversione in formato Base64 Data URI
-                buffered = io.BytesIO()
-                img.save(buffered, format="PNG")
-                img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                return f"data:image/png;base64,{img_str}"
-
-            field_bg_base64 = get_volleyball_field_base64()
-
+            # Inizializzazione session state
             if "canvas_objects" not in st.session_state:
                 st.session_state.canvas_objects = []
+
+            if "canvas_key_counter" not in st.session_state:
+                st.session_state.canvas_key_counter = 0
 
             def salva_stato_corrente():
                 if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data:
@@ -721,25 +717,28 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             if col_p10.button("🔄 **Pulisci**"):
                 st.session_state.canvas_objects = []
                 st.session_state.last_canvas_data = None
+                st.session_state.canvas_key_counter += 1
                 st.rerun()
 
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
                 initial_json = {"objects": st.session_state.canvas_objects}
+                bg_img_pil = get_volleyball_field_image()
 
-                # Utilizzo di background_image in formato Base64 per visibilità garantita
+                # Key dinamico per forzare il refresh pulito mantenendo lo sfondo PIL
+                canvas_key = f"volleyball_board_v13_{st.session_state.canvas_key_counter}"
+
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 255, 255, 0.2)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_color="#D2691E",
-                    background_image=field_bg_base64,
+                    background_image=bg_img_pil,
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
                     initial_drawing=initial_json,
-                    key="volleyball_board_v12"
+                    key=canvas_key
                 )
 
                 if canvas_result and canvas_result.json_data:
@@ -764,7 +763,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
-
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
