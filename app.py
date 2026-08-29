@@ -488,7 +488,9 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 st.success("Seduta aggiunta alla programmazione!")
                 st.rerun()
 
-        with col_list_sedute := col_p2:
+        # Sostituisci la riga errata con queste due:
+        col_list_sedute = col_p2
+        with col_list_sedute:
             st.subheader("📅 Schede Sedute Programmate")
             
             for idx, seduta in enumerate(st.session_state.progr_sedute):
