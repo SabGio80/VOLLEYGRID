@@ -638,91 +638,55 @@ if dati_atleti:
             use_container_width=True
         )
 
-    # --- ESPORTAZIONE PDF (tramite WeasyPrint) ---
+    # --- ESPORTAZIONE PDF (tramite ReportLab) ---
     with col_exp2:
-        from weasyprint import HTML
+        from reportlab.lib.pagesizes import letter, landscape
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
 
-        # Costruzione HTML per la tabella PDF
-        html_headers = "".join([f"<th>{col}</th>" for col in df_report.columns])
-        html_rows = ""
+        pdf_buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            pdf_buffer, 
+            pagesize=landscape(letter),
+            rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Titolo
+        title_style = ParagraphStyle(
+            'ReportTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.HexColor('#1e3a8a'),
+            alignment=1,
+            spaceAfter=15
+        )
+        elements.append(Paragraph("Report Personalizzato Pallavolo", title_style))
+
+        # Conversione dati tabella per ReportLab
+        data_matrix = [list(df_report.columns)]
         for _, row in df_report.iterrows():
-            html_rows += "<tr>" + "".join([f"<td>{val}</td>" for val in row]) + "</tr>"
+            data_matrix.append([str(val) for val in row])
 
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <style>
-                @page {{
-                    size: A4 landscape;
-                    margin: 12mm;
-                    background-color: #ffffff;
-                }}
-                body {{
-                    font-family: Arial, sans-serif;
-                    font-size: 9pt;
-                    color: #333333;
-                    margin: 0;
-                    padding: 0;
-                }}
-                .header {{
-                    text-align: center;
-                    margin-bottom: 15px;
-                    border-bottom: 2px solid #1e3a8a;
-                    padding-bottom: 8px;
-                }}
-                h1 {{
-                    color: #1e3a8a;
-                    font-size: 16pt;
-                    margin: 0 0 5px 0;
-                }}
-                .meta {{
-                    font-size: 8pt;
-                    color: #666666;
-                }}
-                table {{
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin-top: 10px;
-                }}
-                th {{
-                    background-color: #1e3a8a;
-                    color: #ffffff;
-                    font-weight: bold;
-                    padding: 6px 8px;
-                    text-align: left;
-                    font-size: 8.5pt;
-                    border: 1px solid #1e3a8a;
-                }}
-                td {{
-                    padding: 5px 8px;
-                    border: 1px solid #e2e8f0;
-                    font-size: 8pt;
-                }}
-                tr:nth-child(even) {{
-                    background-color: #f8fafc;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>Report Personalizzato Pallavolo</h1>
-                <div class="meta">Data generazione: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Totale atleti: {len(df_report)}</div>
-            </div>
-            <table>
-                <thead>
-                    <tr>{html_headers}</tr>
-                </thead>
-                <tbody>
-                    {html_rows}
-                </tbody>
-            </table>
-        </body>
-        </html>
-        """
-
-        pdf_bytes = HTML(string=html_content).write_pdf()
+        # Creo la tabella PDF
+        t = Table(data_matrix)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, 0), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
+        ]))
+        elements.append(t)
+        
+        doc.build(elements)
+        pdf_bytes = pdf_buffer.getvalue()
 
         st.download_button(
             label="📄 Scarica Report PDF (.pdf)",
@@ -731,6 +695,3 @@ if dati_atleti:
             mime="application/pdf",
             use_container_width=True
         )
-
-else:
-    st.info("Nessun atleta presente nel database per generare il report.")
