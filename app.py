@@ -448,15 +448,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
     if not squadra_id:
         st.info("Seleziona una squadra in alto per definire il programma delle sedute.")
     else:
-        # Recupero atleti per la gestione presenze
         atleti_squadra = db.ottieni_atleti_per_squadra(squadra_id)
         lista_atleti_nomi = [f"{a[0]} - {a[1]} {a[2]}" for a in atleti_squadra] if atleti_squadra else []
 
-        # Inizializzazione archivio esercizi con schemi
         if "archivio_esercizi" not in st.session_state:
             st.session_state.archivio_esercizi = []
 
-        # Inizializzazione sedute
         if "progr_sedute" not in st.session_state:
             st.session_state.progr_sedute = [
                 {
@@ -475,7 +472,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 }
             ]
 
-        # Sotto-schede: Programmazione Sedute vs Creazione Esercizi/Schemi
         tab_sedute, tab_creatore = st.tabs(["📅 Gestione Sedute & Presenze", "✏️ Creatore Esercizi & Campo Tattico"])
 
         # -------------------------------------------------------------------
@@ -519,15 +515,13 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     st.success("Seduta aggiunta con successo!")
                     st.rerun()
 
-            col_list_sedute = col_p2
-            with col_list_sedute:
+            with col_p2:
                 st.subheader("📅 Schede Sedute Programmate")
                 
                 for idx, seduta in enumerate(st.session_state.progr_sedute):
                     titolo_exp = f"📌 {seduta['Seduta']} - {seduta['Data']} ({seduta.get('Ora Inizio','--')} - {seduta.get('Ora Fine','--')}) | {seduta.get('Luogo','')}"
                     
                     with st.expander(titolo_exp, expanded=(idx == 0)):
-                        # Logistica
                         c_l1, c_l2, c_l3 = st.columns(3)
                         with c_l1:
                             seduta['Luogo'] = st.text_input("Luogo", value=seduta.get('Luogo', ''), key=f"luogo_{idx}", disabled=not is_admin)
@@ -536,14 +530,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         with c_l3:
                             seduta['Ora Fine'] = st.text_input("Ora Fine", value=seduta.get('Ora Fine', '20:00'), key=f"ofi_{idx}", disabled=not is_admin)
 
-                        # Focus
                         c_s1, c_s2 = st.columns(2)
                         with c_s1:
                             seduta['Focus Tecnica'] = st.text_input("Focus Tecnico", value=seduta['Focus Tecnica'], key=f"ft_{idx}", disabled=not is_admin)
                         with c_s2:
                             seduta['Focus Tattica'] = st.text_input("Focus Tattico", value=seduta['Focus Tattica'], key=f"ftat_{idx}", disabled=not is_admin)
 
-                        # Presenze Atleti
                         st.write("👥 **Atleti Presenti:**")
                         seduta['Presenti'] = st.multiselect(
                             "Seleziona Atleti Presenti",
@@ -553,7 +545,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                             disabled=not is_admin
                         )
 
-                        # Inserimento rapido da Archivio Esercizi Creati
                         if st.session_state.archivio_esercizi:
                             st.write("📥 **Importa Esercizio da Archivio Tattico:**")
                             c_ex_sel, c_ex_btn = st.columns([3, 1])
@@ -578,7 +569,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                                     st.success("Esercizio inserito!")
                                     st.rerun()
 
-                        # Tabella Esercizi Seduta
                         st.write("**Dettaglio Esercizi & Fasi:**")
                         df_ex = pd.DataFrame(seduta["Esercizi"])
                         
@@ -594,37 +584,31 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         if is_admin and st.button(f"🗑️ Elimina {seduta['Seduta']}", key=f"del_sed_{idx}"):
                             st.session_state.progr_sedute.pop(idx)
                             st.rerun()
-# -------------------------------------------------------------------
+
+        # -------------------------------------------------------------------
         # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
             st.caption("Campo di sfondo fisso, frecce dritte/curve orientabili e colori personalizzabili.")
 
-            import streamlit_drawable_canvas as sdc
-
-            # Oggetti base che compongono il campo da pallavolo (vettoriali)
             def get_volleyball_court_objects():
                 return [
-                    # Sfondo arancione del campo
                     {
                         "type": "rect", "left": 30, "top": 30, "width": 540, "height": 340,
                         "fill": "#D2691E", "stroke": "white", "strokeWidth": 4,
                         "selectable": False, "evented": False
                     },
-                    # Linea centrale (Rete)
                     {
                         "type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370,
                         "stroke": "white", "strokeWidth": 4,
                         "selectable": False, "evented": False
                     },
-                    # Linea attacco sinistra (3m)
                     {
                         "type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370,
                         "stroke": "white", "strokeWidth": 2,
                         "selectable": False, "evented": False
                     },
-                    # Linea attacco destra (3m)
                     {
                         "type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370,
                         "stroke": "white", "strokeWidth": 2,
@@ -632,287 +616,219 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     }
                 ]
 
-            # Inizializzazione degli oggetti nel session_state con il campo di default
-            if "canvas_user_objects" not in st.session_state:
-                st.session_state.canvas_user_objects = []
+            col_c1, col_c2 = st.columns([1, 2])
 
-            def salva_stato_corrente():
-                if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data:
-                    if "objects" in st.session_state.last_canvas_data:
-                        # Salva solo gli oggetti aggiunti dall'utente (escludendo i primi 4 del campo)
-                        all_objs = st.session_state.last_canvas_data["objects"]
-                        st.session_state.canvas_user_objects = all_objs[4:] if len(all_objs) >= 4 else []
+            with col_c1:
+                st.write("**Strumenti di Disegno**")
+                tool_mode = st.selectbox(
+                    "Strumento",
+                    ["freeline", "line", "rect", "circle", "transform"],
+                    index=0,
+                    disabled=not is_admin
+                )
+                stroke_width = st.slider("Spessore Tratto", 1, 10, 3, disabled=not is_admin)
+                stroke_color = st.color_picker("Colore Tratto / Oggetto", "#FFFFFF", disabled=not is_admin)
+                bg_color = "#2E8B57"
 
-            # Controlli Strumenti e Colore
-            col_tools, col_space = st.columns([3, 1])
-            with col_tools:
-                strumenti_map = {
-                    "Sposta / Ruota / Ridimensiona": "transform",
-                    "Disegno Libero (Mano libera)": "freedraw",
-                    "Linea Retta": "line",
-                    "Cerchio / Zona": "circle",
-                    "Rettangolo / Zona": "rect"
-                }
-                c_t1, c_t2, c_t3 = st.columns(3)
-                with c_t1:
-                    strumento_scelto = st.selectbox("Modalità:", list(strumenti_map.keys()), key="draw_mode_label")
-                    drawing_mode = strumenti_map[strumento_scelto]
-                with c_t2:
-                    stroke_color = st.color_picker("Colore elementi/frecce:", "#FFFF00", key="stroke_clr")
-                with c_t3:
-                    stroke_width = st.slider("Spessore:", 1, 10, 3, key="stroke_w")
+                st.write("**Dati Esercizio**")
+                ex_nome = st.text_input("Nome Esercizio", value="Esercizio Tattico 1", disabled=not is_admin)
+                ex_fase = st.selectbox("Fase", ["WARMUP", "TECNICA", "SISTEMA", "TRANSIZIONE", "SITUAZIONALE"], disabled=not is_admin)
+                ex_durata = st.number_input("Durata (min)", min_value=5, max_value=120, value=20, step=5, disabled=not is_admin)
+                ex_desc = st.text_area("Descrizione & Regole", value="Obiettivo e modalità di esecuzione...", disabled=not is_admin)
 
-            # Pulsantiera Inserimento Oggetti
-            st.write("📌 **Inserisci Elementi sul Campo:**")
-            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7, col_p8, col_p9, col_p10 = st.columns(10)
-
-            def aggiungi_gruppo_canvas(obj_json):
-                salva_stato_corrente()
-                st.session_state.canvas_user_objects.append(obj_json)
-                st.rerun()
-
-            def aggiungi_pedina(ruolo, colore_sfondo):
-                semicircle_path = "M 0 25 L 50 25 A 25 25 0 0 0 0 25 Z"
-                pedina = {
-                    "type": "group", "left": 275, "top": 185, "width": 50, "height": 30,
-                    "objects": [
-                        {"type": "path", "path": semicircle_path, "fill": colore_sfondo, "stroke": "#FFFFFF", "strokeWidth": 2, "left": -25, "top": -15},
-                        {"type": "textbox", "text": ruolo, "fontSize": 16, "fontWeight": "bold", "fill": "#FFFFFF", "textAlign": "center", "left": -7, "top": -8, "width": 20}
-                    ],
-                    "hasControls": True, "selectable": True
-                }
-                aggiungi_gruppo_canvas(pedina)
-
-            # Freccia Dritta orientabile con colore dinamico
-            def aggiungi_freccia_dritta(colore):
-                freccia = {
-                    "type": "group", "left": 250, "top": 180, "width": 100, "height": 30,
-                    "objects": [
-                        {"type": "line", "x1": -50, "y1": 0, "x2": 35, "y2": 0, "stroke": colore, "strokeWidth": 5},
-                        {"type": "polygon", "points": [{"x": 35, "y": -10}, {"x": 50, "y": 0}, {"x": 35, "y": 10}], "fill": colore}
-                    ],
-                    "hasControls": True, "selectable": True
-                }
-                aggiungi_gruppo_canvas(freccia)
-
-            # Freccia Curva orientabile con colore dinamico
-            def aggiungi_freccia_curva(colore):
-                path_curvo = "M 0 50 Q 40 -20 80 20"
-                freccia_curva = {
-                    "type": "group", "left": 250, "top": 170, "width": 100, "height": 60,
-                    "objects": [
-                        {"type": "path", "path": path_curvo, "fill": "transparent", "stroke": colore, "strokeWidth": 5, "left": -40, "top": -25},
-                        {"type": "polygon", "points": [{"x": 32, "y": -3}, {"x": 48, "y": 5}, {"x": 38, "y": 18}], "fill": colore}
-                    ],
-                    "hasControls": True, "selectable": True
-                }
-                aggiungi_gruppo_canvas(freccia_curva)
-
-            def aggiungi_pallone():
-                palla = {
-                    "type": "circle", "left": 285, "top": 185, "radius": 12,
-                    "fill": "#FFD700", "stroke": "#000000", "strokeWidth": 2,
-                    "hasControls": True, "selectable": True
-                }
-                aggiungi_gruppo_canvas(palla)
-
-            if col_p1.button("➕ **A**"): aggiungi_pedina("A", "#1E90FF")
-            if col_p2.button("➕ **O**"): aggiungi_pedina("O", "#FF4500")
-            if col_p3.button("➕ **S**"): aggiungi_pedina("S", "#2E8B57")
-            if col_p4.button("➕ **C**"): aggiungi_pedina("C", "#8A2BE2")
-            if col_p5.button("➕ **L**"): aggiungi_pedina("L", "#FFA500")
-            if col_p6.button("➕ **T**"): aggiungi_pedina("T", "#333333")
-            if col_p7.button("➡️ **Fr. Dritta**"): aggiungi_freccia_dritta(stroke_color)
-            if col_p8.button("↪️ **Fr. Curva**"): aggiungi_freccia_curva(stroke_color)
-            if col_p9.button("🏐 **Palla**"): aggiungi_pallone()
-            if col_p10.button("🔄 **Pulisci**"):
-                st.session_state.canvas_user_objects = []
-                st.session_state.last_canvas_data = None
-                st.rerun()
-
-            col_canv, col_info_ex = st.columns([3, 2])
-
-            with col_canv:
-                # Uniamo gli oggetti del campo fissa agli oggetti aggiunti dall'utente
-                full_canvas_objects = get_volleyball_court_objects() + st.session_state.canvas_user_objects
-                initial_json = {"objects": full_canvas_objects}
-
+            with col_c2:
+                st.write("**Campo da Gioco & Schema**")
+                
+                initial_drawing = {"objects": get_volleyball_court_objects()}
+                
                 canvas_result = st_canvas(
-                    fill_color="rgba(255, 255, 255, 0.2)",
+                    fill_color="rgba(255, 165, 0, 0.3)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_color="#1E1E1E",
+                    background_color=bg_color,
+                    initial_drawing=initial_drawing,
+                    update_streamlit=True,
                     height=400,
                     width=600,
-                    drawing_mode=drawing_mode,
-                    initial_drawing=initial_json,
-                    key="volleyball_board_v14"
+                    drawing_mode=tool_mode if is_admin else "transform",
+                    key="canvas_volleyball"
                 )
 
-                if canvas_result and canvas_result.json_data:
-                    st.session_state.last_canvas_data = canvas_result.json_data
+                if st.button("💾 Salva Esercizio in Archivio", type="primary", disabled=not is_admin):
+                    img_data = None
+                    if canvas_result.image_data is not None:
+                        from PIL import Image
+                        img = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+                        buffered = io.BytesIO()
+                        img.save(buffered, format="PNG")
+                        b64_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                        img_data = f"data:image/png;base64,{b64_img}"
 
-            with col_info_ex:
-                st.subheader("💾 Salva in Archivio Esercizi")
-                ex_nome = st.text_input("Nome Esercizio", key="ex_nome_input", disabled=not is_admin)
-                ex_fase = st.selectbox("Fase di Gioco", ["WARMUP", "TECNICA", "SISTEMA", "SITUAZIONALE", "DEFENSE/MURO", "GLOBAL"], key="ex_fase_input", disabled=not is_admin)
-                ex_durata = st.number_input("Durata Stimata (min)", min_value=5, max_value=120, value=20, step=5, key="ex_durata_input", disabled=not is_admin)
-                ex_desc = st.text_area("Descrizione / Regole / Obiettivi", key="ex_desc_input", disabled=not is_admin)
+                    st.session_state.archivio_esercizi.append({
+                        "nome": ex_nome,
+                        "fase": ex_fase,
+                        "durata": ex_durata,
+                        "descrizione": ex_desc,
+                        "schema_img": img_data
+                    })
+                    st.success(f"Esercizio '{ex_nome}' salvato correttamente in archivio!")
 
-                if st.button("💾 Salva Schema & Esercizio", type="primary", disabled=not is_admin):
-                    if ex_nome:
-                        st.session_state.archivio_esercizi.append({
-                            "nome": ex_nome,
-                            "fase": ex_fase,
-                            "durata": ex_durata,
-                            "descrizione": ex_desc,
-                            "canvas_data": canvas_result.json_data if canvas_result else None
-                        })
-                        st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
-                    else:
-                        st.warning("Inserisci il nome dell'esercizio.")
+            if st.session_state.archivio_esercizi:
+                st.divider()
+                st.subheader("📚 Archivio Schemi ed Esercizi Creati")
+                cols_arch = st.columns(3)
+                for idx_arch, item_ex in enumerate(st.session_state.archivio_esercizi):
+                    with cols_arch[idx_arch % 3]:
+                        st.markdown(f"**{item_ex['nome']}** ({item_ex['fase']})")
+                        st.caption(f"⏱️ {item_ex['durata']} min")
+                        st.write(item_ex['descrizione'])
+                        if item_ex.get('schema_img'):
+                            st.image(item_ex['schema_img'], use_column_width=True)
+                        if is_admin and st.button(f"Elimina #{idx_arch+1}", key=f"del_arch_{idx_arch}"):
+                            st.session_state.archivio_esercizi.pop(idx_arch)
+                            st.rerun()
 
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
 elif st.session_state.active_tab == "Reportistica":
-    st.title("📊 Reportistica & Esportazione Documenti PDF")
+    st.title("📄 Reportistica & Esportazione PDF")
 
     if not squadra_id:
-        st.info("Seleziona una squadra in alto per poter generare i report.")
+        st.info("Seleziona una squadra in alto per generare i report.")
     else:
-        st.markdown("Genera e scarica i report PDF ufficiali della rosa completa o delle sedute di allenamento programmate.")
-
-        tab_rep_atleti, tab_rep_allenamento = st.tabs(["📄 Report Rosa Atleti", "📄 Report Sedute Allenamento"])
+        st.subheader("Esportazione Schede e Data Sheet")
+        
+        col_rep1, col_rep2 = st.columns(2)
 
         # -------------------------------------------------------------------
-        # REPORT 1: ROSA ATLETI (PDF)
+        # REPORT 1: SCHEDA SQUADRA E ANAGRAFICA ATLETI
         # -------------------------------------------------------------------
-        with tab_rep_atleti:
-            st.subheader("Stampa Scheda Rosa Squadra")
-            
-            atleti_rep = db.ottieni_atleti_per_squadra(squadra_id)
-            if atleti_rep:
-                df_rep_atleti = pd.DataFrame(atleti_rep, columns=["N° Maglia", "Cognome", "Nome", "Ruolo", "ID Database", "Foto"])
-                st.dataframe(df_rep_atleti[["N° Maglia", "Cognome", "Nome", "Ruolo"]], use_container_width=True, hide_index=True)
+        with col_rep1:
+            st.markdown("### 👥 Report Rosa Squadra")
+            st.write("Genera un documento PDF contenente il dettaglio completo dell'organico e delle schede anagrafiche.")
 
-                if st.button("🖨️ Genera Report PDF Rosa", type="primary"):
-                    buffer = io.BytesIO()
-                    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-                    elements = []
+            if st.button("📄 Genera PDF Rosa Squadra", type="primary"):
+                atleti_squadra = db.ottieni_atleti_per_squadra(squadra_id)
+                
+                buffer = io.BytesIO()
+                doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+                styles = getSampleStyleSheet()
+                elements = []
 
-                    styles = getSampleStyleSheet()
-                    title_style = ParagraphStyle(name="TitleStyle", fontName="Helvetica-Bold", fontSize=18, leading=22, alignment=1, spaceAfter=20)
-                    header_style = ParagraphStyle(name="HeaderStyle", fontName="Helvetica-Bold", fontSize=12, leading=14)
-                    cell_style = ParagraphStyle(name="CellStyle", fontName="Helvetica", fontSize=10, leading=12)
+                title_style = ParagraphStyle(
+                    'TitleStyle',
+                    parent=styles['Heading1'],
+                    fontSize=18,
+                    leading=22,
+                    textColor=colors.HexColor('#1A2B4C'),
+                    alignment=1
+                )
+                elements.append(Paragraph(f"ROSA SQUADRA: {squadra_scelta}", title_style))
+                elements.append(Paragraph(f"Stagione: {stagione_scelta} | Generato il: {datetime.now().strftime('%d/%m/%Y')}", styles['Normal']))
+                elements.append(Spacer(1, 15))
 
-                    elements.append(Paragraph(f"ROSA SQUADRA: {squadra_scelta}", title_style))
-                    elements.append(Paragraph(f"Stagione Agonistica: {stagione_scelta}", styles["Heading2"]))
-                    elements.append(Spacer(1, 15))
-
-                    data_table = [["N°", "Cognome", "Nome", "Ruolo"]]
-                    for a in atleti_rep:
+                if atleti_squadra:
+                    data_table = [["N°", "Cognome", "Nome", "Ruolo", "Data Nascita", "Telefono"]]
+                    for atl in atleti_squadra:
+                        det = db.ottieni_dati_atleta_completi(atl[4])
+                        dn_val = det[5] if det and len(det) > 5 and det[5] else "-"
+                        tel_val = det[13] if det and len(det) > 13 and det[13] else "-"
+                        
                         data_table.append([
-                            Paragraph(str(a[0]), cell_style),
-                            Paragraph(str(a[1]), cell_style),
-                            Paragraph(str(a[2]), cell_style),
-                            Paragraph(str(a[3]), cell_style)
+                            str(atl[0] or "-"),
+                            str(atl[1] or "-"),
+                            str(atl[2] or "-"),
+                            str(atl[3] or "-"),
+                            dn_val,
+                            tel_val
                         ])
 
-                    table = Table(data_table, colWidths=[40, 160, 160, 140])
-                    table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+                    t = Table(data_table, colWidths=[30, 100, 100, 90, 90, 100])
+                    t.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1A2B4C')),
                         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 11),
+                        ('FONTSIZE', (0, 0), (-1, -1), 9),
                         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F3F4F6")),
-                        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
+                        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F5F5F5')),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
                     ]))
+                    elements.append(t)
+                else:
+                    elements.append(Paragraph("Nessun atleta registrato per questa squadra.", styles['Normal']))
 
-                    elements.append(table)
-                    doc.build(elements)
-                    buffer.seek(0)
+                doc.build(elements)
+                buffer.seek(0)
 
-                    st.download_button(
-                        label="⬇️ Scarica PDF Rosa Squadra",
-                        data=buffer,
-                        file_name=f"Rosa_{squadra_scelta.replace(' ', '_')}.pdf",
-                        mime="application/pdf"
-                    )
-            else:
-                st.warning("Nessun atleta registrato in questa squadra.")
-
-        # -------------------------------------------------------------------
-        # REPORT 2: SEDUTA ALLENAMENTO (PDF)
-        # -------------------------------------------------------------------
-        with tab_rep_allenamento:
-            st.subheader("Stampa Schede Allenamento")
-
-            if "progr_sedute" in st.session_state and st.session_state.progr_sedute:
-                idx_sed = st.selectbox(
-                    "Seleziona Seduta da esportare in PDF:", 
-                    options=range(len(st.session_state.progr_sedute)),
-                    format_func=lambda i: f"{st.session_state.progr_sedute[i]['Seduta']} ({st.session_state.progr_sedute[i]['Data']})"
+                st.download_button(
+                    label="💾 Scarica PDF Rosa",
+                    data=buffer,
+                    file_name=f"Rosa_{squadra_scelta.replace(' ', '_')}.pdf",
+                    mime="application/pdf"
                 )
 
-                seduta_target = st.session_state.progr_sedute[idx_sed]
+        # -------------------------------------------------------------------
+        # REPORT 2: SCHEDA PROGRAMMAZIONE SEDUTE ALLENAMENTO
+        # -------------------------------------------------------------------
+        with col_rep2:
+            st.markdown("### 📋 Report Programmazione Allenamenti")
+            st.write("Esporta il programma dettagliato delle sedute di allenamento registrate con relativi esercizi, tempi e presenze.")
 
-                if st.button("🖨️ Genera Scheda Seduta PDF", type="primary"):
-                    buffer = io.BytesIO()
-                    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-                    elements = []
+            if st.button("📄 Genera PDF Programma Allenamenti", type="primary"):
+                buffer_sed = io.BytesIO()
+                doc_sed = SimpleDocTemplate(buffer_sed, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+                styles_sed = getSampleStyleSheet()
+                elements_sed = []
 
-                    styles = getSampleStyleSheet()
-                    t_style = ParagraphStyle(name="TStyle", fontName="Helvetica-Bold", fontSize=18, leading=22, spaceAfter=10)
-                    sub_style = ParagraphStyle(name="SubStyle", fontName="Helvetica-Bold", fontSize=12, leading=15, spaceAfter=5)
-                    body_style = ParagraphStyle(name="BStyle", fontName="Helvetica", fontSize=10, leading=13)
+                t_style = ParagraphStyle('TStyle', parent=styles_sed['Heading1'], fontSize=16, leading=20, textColor=colors.HexColor('#2E8B57'))
+                elements_sed.append(Paragraph(f"PROGRAMMA SEDUTE - {squadra_scelta}", t_style))
+                elements_sed.append(Spacer(1, 10))
 
-                    elements.append(Paragraph(f"SCHEDA ALLENAMENTO: {seduta_target['Seduta']}", t_style))
-                    elements.append(Paragraph(f"<b>Data:</b> {seduta_target['Data']} | <b>Ora:</b> {seduta_target.get('Ora Inizio','--')} - {seduta_target.get('Ora Fine','--')}", body_style))
-                    elements.append(Paragraph(f"<b>Palestra:</b> {seduta_target.get('Luogo','')}", body_style))
-                    elements.append(Spacer(1, 10))
+                if "progr_sedute" in st.session_state and st.session_state.progr_sedute:
+                    for s_item in st.session_state.progr_sedute:
+                        sub_t = ParagraphStyle('SubT', parent=styles_sed['Heading2'], fontSize=12, leading=15, textColor=colors.HexColor('#1A2B4C'))
+                        elements_sed.append(Paragraph(f"📌 {s_item['Seduta']} - Data: {s_item['Data']} ({s_item.get('Ora Inizio','--')} - {s_item.get('Ora Fine','--')})", sub_t))
+                        elements_sed.append(Paragraph(f"<b>Luogo:</b> {s_item.get('Luogo','-')} | <b>Focus Tecnica:</b> {s_item.get('Focus Tecnica','-')} | <b>Focus Tattica:</b> {s_item.get('Focus Tattica','-')}", styles_sed['Normal']))
+                        elements_sed.append(Spacer(1, 5))
 
-                    elements.append(Paragraph(f"<b>Focus Tecnico:</b> {seduta_target.get('Focus Tecnica','')}", body_style))
-                    elements.append(Paragraph(f"<b>Focus Tattico:</b> {seduta_target.get('Focus Tattica','')}", body_style))
-                    elements.append(Spacer(1, 10))
+                        ex_list = s_item.get("Esercizi", [])
+                        if ex_list:
+                            t_ex_data = [["Fase", "Esercizio", "Tempo (min)", "Note"]]
+                            for ex_obj in ex_list:
+                                t_ex_data.append([
+                                    str(ex_obj.get("Fase", "-")),
+                                    str(ex_obj.get("Esercizio", "-")),
+                                    str(ex_obj.get("Tempo (min)", "-")),
+                                    str(ex_obj.get("Note", "-"))
+                                ])
 
-                    # Sezione Presenze
-                    pres_str = ", ".join(seduta_target.get('Presenti', [])) if seduta_target.get('Presenti') else "Nessuno specificato"
-                    elements.append(Paragraph(f"<b>Atleti Convocati/Presenti:</b> {pres_str}", body_style))
-                    elements.append(Spacer(1, 15))
+                            t_ex = Table(t_ex_data, colWidths=[80, 160, 70, 200])
+                            t_ex.setStyle(TableStyle([
+                                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E8B57')),
+                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                                ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+                                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+                            ]))
+                            elements_sed.append(t_ex)
+                        
+                        pres_str = ", ".join(s_item.get("Presenti", [])) if s_item.get("Presenti") else "Nessuna registrazione"
+                        elements_sed.append(Spacer(1, 4))
+                        elements_sed.append(Paragraph(f"<b>Presenti ({len(s_item.get('Presenti', []))}):</b> <font size=8>{pres_str}</font>", styles_sed['Normal']))
+                        elements_sed.append(Spacer(1, 15))
+                else:
+                    elements_sed.append(Paragraph("Nessuna seduta programmata.", styles_sed['Normal']))
 
-                    # Tabella Esercizi
-                    elements.append(Paragraph("Dettaglio Fasi ed Esercizi", sub_style))
-                    ex_data = [["Fase", "Esercizio", "Min", "Note"]]
-                    for item in seduta_target.get("Esercizi", []):
-                        ex_data.append([
-                            Paragraph(str(item.get("Fase", "")), body_style),
-                            Paragraph(str(item.get("Esercizio", "")), body_style),
-                            Paragraph(str(item.get("Tempo (min)", "")), body_style),
-                            Paragraph(str(item.get("Note", "")), body_style)
-                        ])
+                doc_sed.build(elements_sed)
+                buffer_sed.seek(0)
 
-                    table_ex = Table(ex_data, colWidths=[80, 180, 40, 200])
-                    table_ex.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0D9488")),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F8FAFC")),
-                    ]))
-
-                    elements.append(table_ex)
-                    doc.build(elements)
-                    buffer.seek(0)
-
-                    st.download_button(
-                        label="⬇️ Scarica Scheda Seduta (PDF)",
-                        data=buffer,
-                        file_name=f"Seduta_{seduta_target['Seduta'].replace(' ', '_')}.pdf",
-                        mime="application/pdf"
-                    )
-            else:
-                st.info("Nessuna seduta attualmente in programmazione.")
+                st.download_button(
+                    label="💾 Scarica PDF Allenamenti",
+                    data=buffer_sed,
+                    file_name=f"Allenamenti_{squadra_scelta.replace(' ', '_')}.pdf",
+                    mime="application/pdf"
+                )
