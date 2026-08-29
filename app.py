@@ -602,41 +602,40 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
             st.caption("Disegna le traiettorie, i movimenti e i posizionamenti direttamente sul campo da pallavolo e salva l'esercizio nell'archivio.")
 
-            # Funzione per generare l'immagine del campo da pallavolo in B64
+            import io
+            import base64
             from PIL import Image, ImageDraw
-            
-            def crea_immagine_campo():
-                # Dimensioni proporzionate al campo (es. 600x400)
+
+            # Funzione per generare il campo e convertirlo in data URI Base64
+            def crea_immagine_campo_b64():
                 w, h = 600, 400
-                img = Image.new("RGB", (w, h), "#D2691E") # Colore parquet
+                img = Image.new("RGB", (w, h), "#D2691E") # Parquet
                 draw = ImageDraw.Draw(img)
                 
-                # Margini del campo
-                m = 30
-                # Rettangolo perimetrale
-                draw.rectangle([m, m, w - m, h - m], outline="white", width=4)
+                m = 30 # Margine perimetrale
+                draw.rectangle([m, m, w - m, h - m], outline="white", width=4) # Campo
                 
-                # Linea di metà campo (Rete)
                 mid_x = w // 2
-                draw.line([(mid_x, m), (mid_x, h - m)], fill="white", width=4)
+                draw.line([(mid_x, m), (mid_x, h - m)], fill="white", width=4) # Rete
                 
-                # Linee dei 3 metri (in proporzione, 3m su 18m totali = 1/6 della lunghezza per parte)
                 campo_lunghezza = w - 2 * m
                 dist_3m = campo_lunghezza / 6
                 
-                # Linea 3m Sinistra
+                # Linee dei 3 metri
                 draw.line([(m + dist_3m * 2, m), (m + dist_3m * 2, h - m)], fill="white", width=2)
-                # Linea 3m Destra
                 draw.line([(w - m - dist_3m * 2, m), (w - m - dist_3m * 2, h - m)], fill="white", width=2)
                 
-                return img
+                # Conversione in PNG + Base64 per evitare errori interni di Streamlit
+                buffered = io.BytesIO()
+                img.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                return f"data:image/png;base64,{img_str}"
 
-            campo_img = crea_immagine_campo()
+            campo_b64 = crea_immagine_campo_b64()
 
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
-                # Strumenti di disegno con mappatura corretta dei valori
                 strumenti_map = {
                     "Mano libera": "freedraw",
                     "Linea retta": "line",
@@ -654,12 +653,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 with c_tool3:
                     stroke_width = st.slider("Spessore linea:", 1, 10, 3, key="stroke_w")
 
-                # Canvas interattivo con lo sfondo del campo caricato
+                # background_image ora riceve la stringa data URI Base64
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 165, 0, 0.3)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_image=campo_img,
+                    background_image=campo_b64,
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
@@ -685,6 +684,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
+
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
