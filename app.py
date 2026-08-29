@@ -602,24 +602,64 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
             st.caption("Disegna le traiettorie, i movimenti e i posizionamenti direttamente sul campo da pallavolo e salva l'esercizio nell'archivio.")
 
+            # Funzione per generare l'immagine del campo da pallavolo in B64
+            from PIL import Image, ImageDraw
+            
+            def crea_immagine_campo():
+                # Dimensioni proporzionate al campo (es. 600x400)
+                w, h = 600, 400
+                img = Image.new("RGB", (w, h), "#D2691E") # Colore parquet
+                draw = ImageDraw.Draw(img)
+                
+                # Margini del campo
+                m = 30
+                # Rettangolo perimetrale
+                draw.rectangle([m, m, w - m, h - m], outline="white", width=4)
+                
+                # Linea di metà campo (Rete)
+                mid_x = w // 2
+                draw.line([(mid_x, m), (mid_x, h - m)], fill="white", width=4)
+                
+                # Linee dei 3 metri (in proporzione, 3m su 18m totali = 1/6 della lunghezza per parte)
+                campo_lunghezza = w - 2 * m
+                dist_3m = campo_lunghezza / 6
+                
+                # Linea 3m Sinistra
+                draw.line([(m + dist_3m * 2, m), (m + dist_3m * 2, h - m)], fill="white", width=2)
+                # Linea 3m Destra
+                draw.line([(w - m - dist_3m * 2, m), (w - m - dist_3m * 2, h - m)], fill="white", width=2)
+                
+                return img
+
+            campo_img = crea_immagine_campo()
+
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
-                # Strumenti di disegno
+                # Strumenti di disegno con mappatura corretta dei valori
+                strumenti_map = {
+                    "Mano libera": "freedraw",
+                    "Linea retta": "line",
+                    "Rettangolo": "rect",
+                    "Cerchio": "circle",
+                    "Sposta/Rimodella": "transform"
+                }
+                
                 c_tool1, c_tool2, c_tool3 = st.columns(3)
                 with c_tool1:
-                    drawing_mode = st.selectbox("Strumento:", ("freeline", "line", "rect", "circle", "transform"), key="draw_mode")
+                    strumento_scelto = st.selectbox("Strumento:", list(strumenti_map.keys()), key="draw_mode_label")
+                    drawing_mode = strumenti_map[strumento_scelto]
                 with c_tool2:
                     stroke_color = st.color_picker("Colore linea:", "#FF0000", key="stroke_clr")
                 with c_tool3:
                     stroke_width = st.slider("Spessore linea:", 1, 10, 3, key="stroke_w")
 
-                # Canvas interattivo
+                # Canvas interattivo con lo sfondo del campo caricato
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 165, 0, 0.3)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_color="#D2691E",  # Colore parquet/campo
+                    background_image=campo_img,
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
@@ -645,15 +685,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
-
-            st.divider()
-            st.subheader("📚 Archivio Esercizi Tattici Creati")
-            if st.session_state.archivio_esercizi:
-                df_arch = pd.DataFrame(st.session_state.archivio_esercizi)[["nome", "fase", "durata", "descrizione"]]
-                st.dataframe(df_arch, use_container_width=True)
-            else:
-                st.info("Nessun esercizio presente nell'archivio locale.")
-
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
