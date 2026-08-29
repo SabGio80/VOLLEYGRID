@@ -604,9 +604,18 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
 
             import io
             import base64
+            import streamlit_drawable_canvas as sdc
             from PIL import Image, ImageDraw
 
-            # Funzione per generare il campo e convertirlo in data URI Base64
+            # Monkey-patch temporaneo per evitare i bug di compatibilità di streamlit-drawable-canvas
+            def patch_resize_img(img, new_height, new_width):
+                if isinstance(img, str):
+                    return img
+                return img.resize((new_width, new_height))
+
+            sdc._resize_img = patch_resize_img
+
+            # Funzione per generare l'immagine del campo da pallavolo
             def crea_immagine_campo_b64():
                 w, h = 600, 400
                 img = Image.new("RGB", (w, h), "#D2691E") # Parquet
@@ -625,7 +634,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 draw.line([(m + dist_3m * 2, m), (m + dist_3m * 2, h - m)], fill="white", width=2)
                 draw.line([(w - m - dist_3m * 2, m), (w - m - dist_3m * 2, h - m)], fill="white", width=2)
                 
-                # Conversione in PNG + Base64 per evitare errori interni di Streamlit
                 buffered = io.BytesIO()
                 img.save(buffered, format="PNG")
                 img_str = base64.b64encode(buffered.getvalue()).decode()
@@ -653,7 +661,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 with c_tool3:
                     stroke_width = st.slider("Spessore linea:", 1, 10, 3, key="stroke_w")
 
-                # background_image ora riceve la stringa data URI Base64
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 165, 0, 0.3)",
                     stroke_width=stroke_width,
@@ -684,7 +691,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
-
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
