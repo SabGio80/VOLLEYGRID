@@ -601,99 +601,101 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
             st.caption("Disegna traiettorie e posiziona le pedine direttamente sul campo da pallavolo.")
 
-            import io
-            import base64
             import streamlit_drawable_canvas as sdc
-            from PIL import Image, ImageDraw
 
-            # 1. Generazione dinamica dello sfondo campo via SVG/Base64 CSS
-            def crea_immagine_campo_b64():
-                w, h = 600, 400
-                img = Image.new("RGB", (w, h), "#D2691E") # Parquet arancione
-                draw = ImageDraw.Draw(img)
-                
-                m = 30 # Margine esteriore (zone di battuta e bordo)
-                # Rettangolo del campo
-                draw.rectangle([m, m, w - m, h - m], outline="white", width=4)
-                
-                # Linea di metà campo / Rete
-                mid_x = w // 2
-                draw.line([(mid_x, m), (mid_x, h - m)], fill="white", width=4)
-                
-                # Linee dei 3 metri
-                campo_l = w - 2 * m
-                dist_3m = campo_l / 6
-                draw.line([(m + dist_3m * 2, m), (m + dist_3m * 2, h - m)], fill="white", width=2)
-                draw.line([(w - m - dist_3m * 2, m), (w - m - dist_3m * 2, h - m)], fill="white", width=2)
-                
-                buffered = io.BytesIO()
-                img.save(buffered, format="PNG")
-                img_str = base64.b64encode(buffered.getvalue()).decode()
-                return f"data:image/png;base64,{img_str}"
+            # 1. Inizializzazione dello stato degli oggetti nel canvas
+            if "canvas_objects" not in st.session_state:
+                # Disegniamo le linee del campo come oggetti Fabric.js nativi
+                st.session_state.canvas_objects = [
+                    # Sfondo parquet
+                    {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False},
+                    # Perimetro campo
+                    {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False},
+                    # Linea di metà campo (Rete)
+                    {"type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370, "stroke": "white", "strokeWidth": 4, "selectable": False},
+                    # Linee dei 3 metri
+                    {"type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
+                    {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
+                ]
 
-            campo_b64_url = crea_immagine_campo_b64()
-
-            # 2. Selezione Strumenti e Pedine Ruolo
-            col_tools, col_pedine = st.columns([2, 2])
+            # 2. Controlli per aggiungere le pedine dei ruoli
+            st.write("🎯 **Aggiungi Pedine sul Campo:**")
+            col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7 = st.columns(7)
             
+            def aggiungi_pedina(testo, colore):
+                st.session_state.canvas_objects.append({
+                    "type": "textbox",
+                    "text": testo,
+                    "left": 285,
+                    "top": 185,
+                    "fontSize": 24,
+                    "fontWeight": "bold",
+                    "fill": colore,
+                    "backgroundColor": "#FFFFFF",
+                    "padding": 5,
+                    "rx": 15,
+                    "ry": 15,
+                    "hasControls": True,
+                    "selectable": True
+                })
+
+            if col_p1.button("➕ **A** (Alzatore)"):
+                aggiungi_pedina(" A ", "#0000FF")
+            if col_p2.button("➕ **O** (Opposto)"):
+                aggiungi_pedina(" O ", "#FF0000")
+            if col_p3.button("➕ **S** (Schiacc.)"):
+                aggiungi_pedina(" S ", "#008000")
+            if col_p4.button("➕ **C** (Centrale)"):
+                aggiungi_pedina(" C ", "#800080")
+            if col_p5.button("➕ **L** (Libero)"):
+                aggiungi_pedina(" L ", "#FFA500")
+            if col_p6.button("➕ **T** (Tecnico)"):
+                aggiungi_pedina(" T ", "#000000")
+            if col_p7.button("🔄 **Reset Campo**"):
+                st.session_state.canvas_objects = [
+                    {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False},
+                    {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False},
+                    {"type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370, "stroke": "white", "strokeWidth": 4, "selectable": False},
+                    {"type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
+                    {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
+                ]
+                st.rerun()
+
+            # 3. Selezione strumenti di disegno
+            col_tools, col_space = st.columns([3, 1])
             with col_tools:
                 strumenti_map = {
-                    "Mano libera (Traiettorie)": "freedraw",
-                    "Linea retta (Passaggi/Attacchi)": "line",
-                    "Rettangolo (Zone)": "rect",
-                    "Cerchio": "circle",
-                    "Inserisci Testo / Pedina": "text",
-                    "Sposta / Rimodella oggetti": "transform"
+                    "Sposta / Trascina pedine": "transform",
+                    "Disegna Traiettoria (Mano libera)": "freedraw",
+                    "Linea Retta (Attacco/Passaggio)": "line",
+                    "Cerchio / Pallone": "circle",
+                    "Rettangolo / Zona": "rect"
                 }
-                
                 c_t1, c_t2, c_t3 = st.columns(3)
                 with c_t1:
-                    strumento_scelto = st.selectbox("Strumento:", list(strumenti_map.keys()), key="draw_mode_label")
+                    strumento_scelto = st.selectbox("Modalità:", list(strumenti_map.keys()), key="draw_mode_label")
                     drawing_mode = strumenti_map[strumento_scelto]
                 with c_t2:
-                    stroke_color = st.color_picker("Colore elemento:", "#FF0000", key="stroke_clr")
+                    stroke_color = st.color_picker("Colore tratto:", "#FFFF00", key="stroke_clr")
                 with c_t3:
-                    stroke_width = st.slider("Spessore linea:", 1, 10, 3, key="stroke_w")
-
-            with col_pedine:
-                st.write("📌 **Guida Pedine Ruolo (usa lo strumento 'Inserisci Testo / Pedina'):**")
-                st.caption("Fai click sul campo per posizionare le lettere dei ruoli:")
-                c_p1, c_p2, c_p3, c_p4, c_p5, c_p6 = st.columns(6)
-                c_p1.info("**A**: Alzatore")
-                c_p2.info("**O**: Opposto")
-                c_p3.info("**S**: Schiacciatore")
-                c_p4.info("**C**: Centrale")
-                c_p5.info("**L**: Libero")
-                c_p6.warning("**T**: Tecnico")
+                    stroke_width = st.slider("Spessore tratto:", 1, 10, 3, key="stroke_w")
 
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
-                # Layout container con sfondo campo in CSS per evitare ogni errore di caricamento
-                st.markdown(
-                    f"""
-                    <style>
-                    div[data-testid="stCanvas"] {{
-                        background-image: url("{campo_b64_url}");
-                        background-size: cover;
-                        background-position: center;
-                        border: 2px solid #333;
-                    }}
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
+                # Creazione dello stato iniziale in formato JSON
+                initial_json = {"objects": st.session_state.canvas_objects}
 
-                # Canvas trasparente sovrapposto al campo
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 255, 255, 0.2)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_color="rgba(0,0,0,0)", # Trasparente per mostrare il campo sottostante
+                    background_color="#D2691E",
                     height=400,
                     width=600,
                     drawing_mode=drawing_mode,
-                    key="volleyball_canvas_v2"
+                    initial_drawing=initial_json,
+                    key="volleyball_canvas_v3"
                 )
 
             with col_info_ex:
@@ -715,7 +717,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                         st.success(f"Esercizio '{ex_nome}' registrato nell'archivio!")
                     else:
                         st.warning("Inserisci il nome dell'esercizio.")
-
 # ==========================================
 # --- TAB 4: REPORTISTICA & ESPORTAZIONE PDF ---
 # ==========================================
