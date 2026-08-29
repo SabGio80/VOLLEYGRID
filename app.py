@@ -6,8 +6,8 @@ from datetime import datetime
 from database import Database
 
 # Import ReportLab per l'esportazione PDF
-from reportlab.lib.pagesizes import letter, landscape
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
+from reportlab.lib.pagesizes import letter, landscape, A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
@@ -156,7 +156,7 @@ with col_top3:
 st.divider()
 
 # --- TABS PRINCIPALI ---
-tabs = ["Gestione Squadre", "Rosa Atleti", "Reportistica"]
+tabs = ["Gestione Squadre", "Rosa Atleti", "Programmazione Allenamenti", "Reportistica"]
 
 if "target_tab" in st.session_state:
     st.session_state.nav_tab = st.session_state.target_tab
@@ -333,7 +333,7 @@ elif st.session_state.active_tab == "Rosa Atleti":
                                 foto_b64 = file_to_base64(foto_file) if foto_file else None
                                 db.aggiungi_atleta(nome, cognome, ruolo, numero, squadra_id, foto_base64=foto_b64)
                                 st.session_state.modo_nuovo_atleta = False
-                                st.success("Atleta salvato!")
+                                st.success("Salvato!")
                                 st.rerun()
                             else:
                                 st.warning("Inserisci nome e cognome.")
@@ -439,7 +439,175 @@ elif st.session_state.active_tab == "Rosa Atleti":
             st.info("Nessun atleta presente in questa squadra.")
 
 # ==========================================
-# --- TAB 3: REPORTISTICA ---
+# --- TAB 3: PROGRAMMAZIONE ALLENAMENTI (MODELLO KIOENE PADOVA) ---
+# ==========================================
+elif st.session_state.active_tab == "Programmazione Allenamenti":
+    st.title("📋 Programmazione Allenamenti & Microcicli")
+    
+    if not squadra_id:
+        st.info("Seleziona una squadra in alto per definire il programma delle sedute.")
+    else:
+        st.caption(f"Programmazione della squadra: **{squadra_scelta}** | Stagione: **{stagione_scelta}**")
+        
+        # Inizializzazione dati di supporto in session state per la griglia
+        if "progr_sedute" not in st.session_state:
+            st.session_state.progr_sedute = [
+                {
+                    "Seduta": "SEDUTA 1", "Data": datetime.now().strftime("%d/%m/%Y"),
+                    "Focus Tecnica": "TECNICA MURO", "Focus Tattica": "FASE PALLA SCONTATA",
+                    "Esercizi": [
+                        {"Fase": "WARMUP", "Descrizione": "Attivazione dinamica + Tecnica Palla Alta", "Tempo (min)": 15, "Note": "Palla da allenamento"},
+                        {"Fase": "TECNICA", "Descrizione": "Spostamento muro + difesa palla scontata", "Tempo (min)": 40, "Note": "3 gruppi da 4"},
+                        {"Fase": "SISTEMA", "Descrizione": "6vs6 da battuta e seconda palla", "Tempo (min)": 35, "Note": "Punteggio speciale"},
+                        {"Fase": "FINALE", "Descrizione": "Defaticamento e Core Stability", "Tempo (min)": 10, "Note": "Libero"}
+                    ]
+                }
+            ]
+
+        col_p1, col_p2 = st.columns([1, 2])
+
+        with col_p1:
+            st.subheader("➕ Gestione Sedute")
+            n_seduta = st.text_input("Nome/Numero Seduta", value=f"SEDUTA {len(st.session_state.progr_sedute) + 1}")
+            d_seduta = st.date_input("Data Seduta").strftime("%d/%m/%Y")
+            f_tecnica = st.text_input("Focus Tecnico Main", value="TECNICA MURO")
+            f_tattica = st.text_input("Focus Tattico / Sistema", value="FASE PALLA SCONTATA")
+            
+            if st.button("Aggiungi Nuova Seduta", type="primary", disabled=not is_admin):
+                st.session_state.progr_sedute.append({
+                    "Seduta": n_seduta,
+                    "Data": d_seduta,
+                    "Focus Tecnica": f_tecnica,
+                    "Focus Tattica": f_tattica,
+                    "Esercizi": [
+                        {"Fase": "WARMUP", "Descrizione": "Attivazione", "Tempo (min)": 15, "Note": ""},
+                        {"Fase": "TECNICA", "Descrizione": "", "Tempo (min)": 30, "Note": ""},
+                        {"Fase": "FINALE", "Descrizione": "", "Tempo (min)": 15, "Note": ""}
+                    ]
+                })
+                st.success("Seduta aggiunta alla programmazione!")
+                st.rerun()
+
+        with col_list_sedute := col_p2:
+            st.subheader("📅 Schede Sedute Programmate")
+            
+            for idx, seduta in enumerate(st.session_state.progr_sedute):
+                with st.expander(f"📌 {seduta['Seduta']} - {seduta['Data']} | {seduta['Focus Tecnica']}", expanded=(idx == 0)):
+                    c_s1, c_s2 = st.columns(2)
+                    with c_s1:
+                        seduta['Focus Tecnica'] = st.text_input(f"Focus Tecnico", value=seduta['Focus Tecnica'], key=f"ft_{idx}", disabled=not is_admin)
+                    with c_s2:
+                        seduta['Focus Tattica'] = st.text_input(f"Focus Tattico", value=seduta['Focus Tattica'], key=f"ftat_{idx}", disabled=not is_admin)
+                    
+                    st.write("**Dettaglio Esercizi & Fasi:**")
+                    df_ex = pd.DataFrame(seduta["Esercizi"])
+                    
+                    edited_ex = st.data_editor(
+                        df_ex,
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        key=f"editor_seduta_{idx}",
+                        disabled=not is_admin
+                    )
+                    
+                    seduta["Esercizi"] = edited_ex.to_dict(orient="records")
+                    
+                    if is_admin and st.button(f"🗑️ Elimina {seduta['Seduta']}", key=f"del_sed_{idx}"):
+                        st.session_state.progr_sedute.pop(idx)
+                        st.rerun()
+
+        st.divider()
+        st.subheader("📄 Esporta Programmazione Completa (Stile Kioene Padova)")
+        
+        if st.button("🚀 Genera PDF Programmazione Landscape"):
+            pdf_buffer = io.BytesIO()
+            doc = SimpleDocTemplate(
+                pdf_buffer, 
+                pagesize=landscape(A4),
+                rightMargin=15, leftMargin=15, topMargin=15, bottomMargin=15
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                'ProgTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                textColor=colors.HexColor('#1e3a8a'),
+                alignment=1,
+                spaceAfter=10
+            )
+            
+            sub_title_style = ParagraphStyle(
+                'ProgSubTitle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#475569'),
+                alignment=1,
+                spaceAfter=15
+            )
+
+            elements.append(Paragraph(f"PROGRAMMAZIONE ALLENAMENTI - {squadra_scelta.upper()}", title_style))
+            elements.append(Paragraph(f"Stagione Agonistica {stagione_scelta}", sub_title_style))
+
+            cell_hdr = ParagraphStyle('CHdr', fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke, alignment=1)
+            cell_txt = ParagraphStyle('CTxt', fontName='Helvetica', fontSize=7, alignment=0)
+            cell_txt_b = ParagraphStyle('CTxtB', fontName='Helvetica-Bold', fontSize=7, alignment=1)
+
+            # Generazione griglia per ogni seduta
+            for seduta in st.session_state.progr_sedute:
+                table_data = [
+                    [
+                        Paragraph(f"<b>{seduta['Seduta']} ({seduta['Data']})</b>", cell_hdr),
+                        Paragraph(f"<b>FOCUS TECNICO: {seduta['Focus Tecnica']}</b>", cell_hdr),
+                        Paragraph(f"<b>FOCUS TATTICO: {seduta['Focus Tattica']}</b>", cell_hdr),
+                        Paragraph("", cell_hdr)
+                    ],
+                    [
+                        Paragraph("FASE", cell_hdr),
+                        Paragraph("DESCRIZIONE ESERCIZIO / CONTENUTO", cell_hdr),
+                        Paragraph("TEMPO", cell_hdr),
+                        Paragraph("NOTE & MATERIALI", cell_hdr)
+                    ]
+                ]
+
+                for ex in seduta["Esercizi"]:
+                    table_data.append([
+                        Paragraph(str(ex.get("Fase", "")), cell_txt_b),
+                        Paragraph(str(ex.get("Descrizione", "")), cell_txt),
+                        Paragraph(f"{ex.get('Tempo (min)', '')} min", cell_txt_b),
+                        Paragraph(str(ex.get("Note", "")), cell_txt)
+                    ])
+
+                t_seduta = Table(table_data, colWidths=[100, 450, 70, 160])
+                t_seduta.setStyle(TableStyle([
+                    ('SPAN', (0, 0), (0, 0)),
+                    ('SPAN', (1, 0), (1, 0)),
+                    ('SPAN', (2, 0), (3, 0)),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+                    ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#3b82f6')),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#94a3b8')),
+                    ('ROWBACKGROUNDS', (0, 2), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
+                ]))
+
+                elements.append(t_seduta)
+                elements.append(Spacer(1, 12))
+
+            doc.build(elements)
+            pdf_bytes = pdf_buffer.getvalue()
+
+            st.download_button(
+                label="📄 Scarica Scheda Programmazione PDF (.pdf)",
+                data=pdf_bytes,
+                file_name=f"programmazione_{squadra_scelta.lower().replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+
+# ==========================================
+# --- TAB 4: REPORTISTICA ---
 # ==========================================
 elif st.session_state.active_tab == "Reportistica":
     st.title("📊 Generatore di Report Personalizzati")
@@ -462,6 +630,7 @@ elif st.session_state.active_tab == "Reportistica":
             df_atl.columns = cols_fallback
             df_atl["Telefono"] = "-"
             df_atl["Email"] = "-"
+
         if dati_antropometria:
             cols_ant = ["ID_Ant", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
                         "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
@@ -534,7 +703,7 @@ elif st.session_state.active_tab == "Reportistica":
         if inc_cf: colonne_selezionate.append("Codice Fiscale")
         if inc_naz: colonne_selezionate.append("Nazionalità")
         if inc_visita: colonne_selezionate.append("Scadenza Visita")
-        
+
         if inc_email: colonne_selezionate.append("Email")
         if inc_tel: colonne_selezionate.append("Telefono")
         if inc_ind: colonne_selezionate.append("Indirizzo")
