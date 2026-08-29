@@ -4,6 +4,7 @@ import pandas as pd
 import base64
 from datetime import datetime
 from database import Database
+from streamlit_drawable_canvas import st_canvas
 
 # Import ReportLab per l'esportazione PDF
 from reportlab.lib.pagesizes import letter, landscape, A4
@@ -439,174 +440,215 @@ elif st.session_state.active_tab == "Rosa Atleti":
             st.info("Nessun atleta presente in questa squadra.")
 
 # ==========================================
-# --- TAB 3: PROGRAMMAZIONE ALLENAMENTI (MODELLO KIOENE PADOVA) ---
+# --- TAB 3: PROGRAMMAZIONE ALLENAMENTI & LAVAGNA TATTICA ---
 # ==========================================
 elif st.session_state.active_tab == "Programmazione Allenamenti":
-    st.title("📋 Programmazione Allenamenti & Microcicli")
+    st.title("📋 Programmazione Allenamenti & Lavagna Tattica")
     
     if not squadra_id:
         st.info("Seleziona una squadra in alto per definire il programma delle sedute.")
     else:
-        st.caption(f"Programmazione della squadra: **{squadra_scelta}** | Stagione: **{stagione_scelta}**")
-        
-        # Inizializzazione dati di supporto in session state per la griglia
+        # Recupero atleti per la gestione presenze
+        atleti_squadra = db.ottieni_atleti_per_squadra(squadra_id)
+        lista_atleti_nomi = [f"{a[0]} - {a[1]} {a[2]}" for a in atleti_squadra] if atleti_squadra else []
+
+        # Inizializzazione archivio esercizi con schemi
+        if "archivio_esercizi" not in st.session_state:
+            st.session_state.archivio_esercizi = []
+
+        # Inizializzazione sedute
         if "progr_sedute" not in st.session_state:
             st.session_state.progr_sedute = [
                 {
-                    "Seduta": "SEDUTA 1", "Data": datetime.now().strftime("%d/%m/%Y"),
-                    "Focus Tecnica": "TECNICA MURO", "Focus Tattica": "FASE PALLA SCONTATA",
+                    "Seduta": "SEDUTA 1", 
+                    "Data": datetime.now().strftime("%d/%m/%Y"),
+                    "Ora Inizio": "18:00",
+                    "Ora Fine": "20:00",
+                    "Luogo": "Palazzetto dello Sport",
+                    "Focus Tecnica": "TECNICA MURO", 
+                    "Focus Tattica": "FASE PALLA SCONTATA",
+                    "Presenti": lista_atleti_nomi.copy(),
                     "Esercizi": [
-                        {"Fase": "WARMUP", "Descrizione": "Attivazione dinamica + Tecnica Palla Alta", "Tempo (min)": 15, "Note": "Palla da allenamento"},
-                        {"Fase": "TECNICA", "Descrizione": "Spostamento muro + difesa palla scontata", "Tempo (min)": 40, "Note": "3 gruppi da 4"},
-                        {"Fase": "SISTEMA", "Descrizione": "6vs6 da battuta e seconda palla", "Tempo (min)": 35, "Note": "Punteggio speciale"},
-                        {"Fase": "FINALE", "Descrizione": "Defaticamento e Core Stability", "Tempo (min)": 10, "Note": "Libero"}
+                        {"Fase": "WARMUP", "Esercizio": "Attivazione dinamica", "Tempo (min)": 15, "Note": "Palla da allenamento"},
+                        {"Fase": "TECNICA", "Esercizio": "Spostamento muro + difesa", "Tempo (min)": 40, "Note": "3 gruppi da 4"}
                     ]
                 }
             ]
 
-        col_p1, col_p2 = st.columns([1, 2])
+        # Sotto-schede: Programmazione Sedute vs Creazione Esercizi/Schemi
+        tab_sedute, tab_creatore = st.tabs(["📅 Gestione Sedute & Presenze", "✏️ Creatore Esercizi & Campo Tattico"])
 
-        with col_p1:
-            st.subheader("➕ Gestione Sedute")
-            n_seduta = st.text_input("Nome/Numero Seduta", value=f"SEDUTA {len(st.session_state.progr_sedute) + 1}")
-            d_seduta = st.date_input("Data Seduta").strftime("%d/%m/%Y")
-            f_tecnica = st.text_input("Focus Tecnico Main", value="TECNICA MURO")
-            f_tattica = st.text_input("Focus Tattico / Sistema", value="FASE PALLA SCONTATA")
-            
-            if st.button("Aggiungi Nuova Seduta", type="primary", disabled=not is_admin):
-                st.session_state.progr_sedute.append({
-                    "Seduta": n_seduta,
-                    "Data": d_seduta,
-                    "Focus Tecnica": f_tecnica,
-                    "Focus Tattica": f_tattica,
-                    "Esercizi": [
-                        {"Fase": "WARMUP", "Descrizione": "Attivazione", "Tempo (min)": 15, "Note": ""},
-                        {"Fase": "TECNICA", "Descrizione": "", "Tempo (min)": 30, "Note": ""},
-                        {"Fase": "FINALE", "Descrizione": "", "Tempo (min)": 15, "Note": ""}
-                    ]
-                })
-                st.success("Seduta aggiunta alla programmazione!")
-                st.rerun()
+        # -------------------------------------------------------------------
+        # SUB-TAB 1: GESTIONE SEDUTE, ORA, LUOGO E PRESENZE
+        # -------------------------------------------------------------------
+        with tab_sedute:
+            col_p1, col_p2 = st.columns([1, 2])
 
-        # Sostituisci la riga errata con queste due:
-        col_list_sedute = col_p2
-        with col_list_sedute:
-            st.subheader("📅 Schede Sedute Programmate")
-            
-            for idx, seduta in enumerate(st.session_state.progr_sedute):
-                with st.expander(f"📌 {seduta['Seduta']} - {seduta['Data']} | {seduta['Focus Tecnica']}", expanded=(idx == 0)):
-                    c_s1, c_s2 = st.columns(2)
-                    with c_s1:
-                        seduta['Focus Tecnica'] = st.text_input(f"Focus Tecnico", value=seduta['Focus Tecnica'], key=f"ft_{idx}", disabled=not is_admin)
-                    with c_s2:
-                        seduta['Focus Tattica'] = st.text_input(f"Focus Tattico", value=seduta['Focus Tattica'], key=f"ftat_{idx}", disabled=not is_admin)
+            with col_p1:
+                st.subheader("➕ Aggiungi Nuova Seduta")
+                n_seduta = st.text_input("Nome Seduta", value=f"SEDUTA {len(st.session_state.progr_sedute) + 1}")
+                d_seduta = st.date_input("Data Seduta").strftime("%d/%m/%Y")
+                
+                c_ora1, c_ora2 = st.columns(2)
+                with c_ora1:
+                    ora_in = st.time_input("Ora Inizio", value=datetime.strptime("18:00", "%H:%M").time()).strftime("%H:%M")
+                with c_ora2:
+                    ora_fi = st.time_input("Ora Fine", value=datetime.strptime("20:00", "%H:%M").time()).strftime("%H:%M")
+                
+                luogo_sed = st.text_input("Luogo / Palestra", value="Palazzetto dello Sport")
+                f_tecnica = st.text_input("Focus Tecnico Main", value="TECNICA MURO")
+                f_tattica = st.text_input("Focus Tattico / Sistema", value="FASE PALLA SCONTATA")
+                
+                presenti_default = st.multiselect("Atleti Convocati/Presenti", options=lista_atleti_nomi, default=lista_atleti_nomi)
+
+                if st.button("Aggiungi Seduta", type="primary", disabled=not is_admin):
+                    st.session_state.progr_sedute.append({
+                        "Seduta": n_seduta,
+                        "Data": d_seduta,
+                        "Ora Inizio": ora_in,
+                        "Ora Fine": ora_fi,
+                        "Luogo": luogo_sed,
+                        "Focus Tecnica": f_tecnica,
+                        "Focus Tattica": f_tattica,
+                        "Presenti": presenti_default,
+                        "Esercizi": [
+                            {"Fase": "WARMUP", "Esercizio": "Attivazione", "Tempo (min)": 15, "Note": ""},
+                            {"Fase": "TECNICA", "Esercizio": "", "Tempo (min)": 30, "Note": ""}
+                        ]
+                    })
+                    st.success("Seduta aggiunta con successo!")
+                    st.rerun()
+
+            col_list_sedute = col_p2
+            with col_list_sedute:
+                st.subheader("📅 Schede Sedute Programmate")
+                
+                for idx, seduta in enumerate(st.session_state.progr_sedute):
+                    titolo_exp = f"📌 {seduta['Seduta']} - {seduta['Data']} ({seduta.get('Ora Inizio','--')} - {seduta.get('Ora Fine','--')}) | {seduta.get('Luogo','')}"
                     
-                    st.write("**Dettaglio Esercizi & Fasi:**")
-                    df_ex = pd.DataFrame(seduta["Esercizi"])
-                    
-                    edited_ex = st.data_editor(
-                        df_ex,
-                        num_rows="dynamic",
-                        use_container_width=True,
-                        key=f"editor_seduta_{idx}",
-                        disabled=not is_admin
-                    )
-                    
-                    seduta["Esercizi"] = edited_ex.to_dict(orient="records")
-                    
-                    if is_admin and st.button(f"🗑️ Elimina {seduta['Seduta']}", key=f"del_sed_{idx}"):
-                        st.session_state.progr_sedute.pop(idx)
-                        st.rerun()
+                    with st.expander(titolo_exp, expanded=(idx == 0)):
+                        # Logistica
+                        c_l1, c_l2, c_l3 = st.columns(3)
+                        with c_l1:
+                            seduta['Luogo'] = st.text_input("Luogo", value=seduta.get('Luogo', ''), key=f"luogo_{idx}", disabled=not is_admin)
+                        with c_l2:
+                            seduta['Ora Inizio'] = st.text_input("Ora Inizio", value=seduta.get('Ora Inizio', '18:00'), key=f"oin_{idx}", disabled=not is_admin)
+                        with c_l3:
+                            seduta['Ora Fine'] = st.text_input("Ora Fine", value=seduta.get('Ora Fine', '20:00'), key=f"ofi_{idx}", disabled=not is_admin)
 
-        st.divider()
-        st.subheader("📄 Esporta Programmazione Completa (Stile Kioene Padova)")
-        
-        if st.button("🚀 Genera PDF Programmazione Landscape"):
-            pdf_buffer = io.BytesIO()
-            doc = SimpleDocTemplate(
-                pdf_buffer, 
-                pagesize=landscape(A4),
-                rightMargin=15, leftMargin=15, topMargin=15, bottomMargin=15
-            )
-            elements = []
-            styles = getSampleStyleSheet()
+                        # Focus
+                        c_s1, c_s2 = st.columns(2)
+                        with c_s1:
+                            seduta['Focus Tecnica'] = st.text_input("Focus Tecnico", value=seduta['Focus Tecnica'], key=f"ft_{idx}", disabled=not is_admin)
+                        with c_s2:
+                            seduta['Focus Tattica'] = st.text_input("Focus Tattico", value=seduta['Focus Tattica'], key=f"ftat_{idx}", disabled=not is_admin)
 
-            title_style = ParagraphStyle(
-                'ProgTitle',
-                parent=styles['Heading1'],
-                fontSize=16,
-                textColor=colors.HexColor('#1e3a8a'),
-                alignment=1,
-                spaceAfter=10
-            )
-            
-            sub_title_style = ParagraphStyle(
-                'ProgSubTitle',
-                parent=styles['Normal'],
-                fontSize=10,
-                textColor=colors.HexColor('#475569'),
-                alignment=1,
-                spaceAfter=15
-            )
+                        # Presenze Atleti
+                        st.write("👥 **Atleti Presenti:**")
+                        seduta['Presenti'] = st.multiselect(
+                            "Seleziona Atleti Presenti",
+                            options=lista_atleti_nomi,
+                            default=seduta.get('Presenti', []),
+                            key=f"pres_{idx}",
+                            disabled=not is_admin
+                        )
 
-            elements.append(Paragraph(f"PROGRAMMAZIONE ALLENAMENTI - {squadra_scelta.upper()}", title_style))
-            elements.append(Paragraph(f"Stagione Agonistica {stagione_scelta}", sub_title_style))
+                        # Inserimento rapido da Archivio Esercizi Creati
+                        if st.session_state.archivio_esercizi:
+                            st.write("📥 **Importa Esercizio da Archivio Tattico:**")
+                            c_ex_sel, c_ex_btn = st.columns([3, 1])
+                            with c_ex_sel:
+                                ex_scelto_idx = st.selectbox(
+                                    "Seleziona esercizio salvato", 
+                                    options=range(len(st.session_state.archivio_esercizi)),
+                                    format_func=lambda i: st.session_state.archivio_esercizi[i]['nome'],
+                                    key=f"sel_arch_{idx}"
+                                )
+                            with c_ex_btn:
+                                st.write("")
+                                st.write("")
+                                if st.button("Importa", key=f"btn_imp_{idx}", disabled=not is_admin):
+                                    obj_ex = st.session_state.archivio_esercizi[ex_scelto_idx]
+                                    seduta["Esercizi"].append({
+                                        "Fase": obj_ex["fase"],
+                                        "Esercizio": obj_ex["nome"],
+                                        "Tempo (min)": obj_ex["durata"],
+                                        "Note": obj_ex["descrizione"]
+                                    })
+                                    st.success("Esercizio inserito!")
+                                    st.rerun()
 
-            cell_hdr = ParagraphStyle('CHdr', fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke, alignment=1)
-            cell_txt = ParagraphStyle('CTxt', fontName='Helvetica', fontSize=7, alignment=0)
-            cell_txt_b = ParagraphStyle('CTxtB', fontName='Helvetica-Bold', fontSize=7, alignment=1)
+                        # Tabella Esercizi Seduta
+                        st.write("**Dettaglio Esercizi & Fasi:**")
+                        df_ex = pd.DataFrame(seduta["Esercizi"])
+                        
+                        edited_ex = st.data_editor(
+                            df_ex,
+                            num_rows="dynamic",
+                            use_container_width=True,
+                            key=f"editor_seduta_{idx}",
+                            disabled=not is_admin
+                        )
+                        seduta["Esercizi"] = edited_ex.to_dict(orient="records")
+                        
+                        if is_admin and st.button(f"🗑️ Elimina {seduta['Seduta']}", key=f"del_sed_{idx}"):
+                            st.session_state.progr_sedute.pop(idx)
+                            st.rerun()
 
-            # Generazione griglia per ogni seduta
-            for seduta in st.session_state.progr_sedute:
-                table_data = [
-                    [
-                        Paragraph(f"<b>{seduta['Seduta']} ({seduta['Data']})</b>", cell_hdr),
-                        Paragraph(f"<b>FOCUS TECNICO: {seduta['Focus Tecnica']}</b>", cell_hdr),
-                        Paragraph(f"<b>FOCUS TATTICO: {seduta['Focus Tattica']}</b>", cell_hdr),
-                        Paragraph("", cell_hdr)
-                    ],
-                    [
-                        Paragraph("FASE", cell_hdr),
-                        Paragraph("DESCRIZIONE ESERCIZIO / CONTENUTO", cell_hdr),
-                        Paragraph("TEMPO", cell_hdr),
-                        Paragraph("NOTE & MATERIALI", cell_hdr)
-                    ]
-                ]
+        # -------------------------------------------------------------------
+        # SUB-TAB 2: CREATORE ESERCIZI & CAMPO DA PALLAVOLO
+        # -------------------------------------------------------------------
+        with tab_creatore:
+            st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
+            st.caption("Disegna le traiettorie, i movimenti e i posizionamenti direttamente sul campo da pallavolo e salva l'esercizio nell'archivio.")
 
-                for ex in seduta["Esercizi"]:
-                    table_data.append([
-                        Paragraph(str(ex.get("Fase", "")), cell_txt_b),
-                        Paragraph(str(ex.get("Descrizione", "")), cell_txt),
-                        Paragraph(f"{ex.get('Tempo (min)', '')} min", cell_txt_b),
-                        Paragraph(str(ex.get("Note", "")), cell_txt)
-                    ])
+            col_canv, col_info_ex = st.columns([3, 2])
 
-                t_seduta = Table(table_data, colWidths=[100, 450, 70, 160])
-                t_seduta.setStyle(TableStyle([
-                    ('SPAN', (0, 0), (0, 0)),
-                    ('SPAN', (1, 0), (1, 0)),
-                    ('SPAN', (2, 0), (3, 0)),
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
-                    ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#3b82f6')),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#94a3b8')),
-                    ('ROWBACKGROUNDS', (0, 2), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
-                ]))
+            with col_canv:
+                # Strumenti di disegno
+                c_tool1, c_tool2, c_tool3 = st.columns(3)
+                with c_tool1:
+                    drawing_mode = st.selectbox("Strumento:", ("freeline", "line", "rect", "circle", "transform"), key="draw_mode")
+                with c_tool2:
+                    stroke_color = st.color_picker("Colore linea:", "#FF0000", key="stroke_clr")
+                with c_tool3:
+                    stroke_width = st.slider("Spessore linea:", 1, 10, 3, key="stroke_w")
 
-                elements.append(t_seduta)
-                elements.append(Spacer(1, 12))
+                # Canvas interattivo
+                canvas_result = st_canvas(
+                    fill_color="rgba(255, 165, 0, 0.3)",
+                    stroke_width=stroke_width,
+                    stroke_color=stroke_color,
+                    background_color="#1e3a8a",  # Sfondo Blu Campo
+                    height=400,
+                    width=600,
+                    drawing_mode=drawing_mode,
+                    key="volleyball_court_canvas",
+                )
+                st.caption("💡 Suggerimento: Usa 'freeline' per le traiettorie a mano libera o 'line' per i passaggi diretti.")
 
-            doc.build(elements)
-            pdf_bytes = pdf_buffer.getvalue()
+            with col_info_ex:
+                st.subheader("💾 Dati Esercizio")
+                ex_nome = st.text_input("Nome Esercizio", value="Battuta e Attacco Palla Scontata")
+                ex_fase = st.selectbox("Fase di Gioco", ["WARMUP", "TECNICA", "SISTEMA / 6vs6", "FINALE"])
+                ex_durata = st.number_input("Durata (minuti)", min_value=1, max_value=120, value=20)
+                ex_desc = st.text_area("Descrizione & Regole del Punteggio", value="Servizio da zona 1/6. La ricezione deve attaccare solo palla alta in Z4...")
 
-            st.download_button(
-                label="📄 Scarica Scheda Programmazione PDF (.pdf)",
-                data=pdf_bytes,
-                file_name=f"programmazione_{squadra_scelta.lower().replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+                if st.button("💾 Salva Esercizio in Archivio", type="primary", disabled=not is_admin):
+                    st.session_state.archivio_esercizi.append({
+                        "nome": ex_nome,
+                        "fase": ex_fase,
+                        "durata": ex_durata,
+                        "descrizione": ex_desc
+                    })
+                    st.success(f"Esercizio '{ex_nome}' salvato! Ora puoi selezionarlo direttamente nelle sedute.")
+
+            # Mostra Archivio Esercizi Salvati
+            if st.session_state.archivio_esercizi:
+                st.divider()
+                st.subheader("📚 Archivio Esercizi Creati")
+                df_arch = pd.DataFrame(st.session_state.archivio_esercizi)
+                st.dataframe(df_arch, use_container_width=True)
 
 # ==========================================
 # --- TAB 4: REPORTISTICA ---
