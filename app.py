@@ -807,7 +807,7 @@ elif st.session_state.active_tab == "Reportistica":
                     cell_style = ParagraphStyle(name="CellStyle", fontName="Helvetica", fontSize=10, leading=12)
 
                     elements.append(Paragraph(f"ROSA SQUADRA: {squadra_scelta}", title_style))
-                    elements.append(Paragraph(f"Stagione Agonistica: {stagione_scelta}", styles["Subtitle"]))
+                    elements.append(Paragraph(f"Stagione Agonistica: {stagione_scelta}", styles["Heading2"]))
                     elements.append(Spacer(1, 15))
 
                     data_table = [["N°", "Cognome", "Nome", "Ruolo"]]
