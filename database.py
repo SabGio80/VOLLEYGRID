@@ -104,7 +104,7 @@ class Database:
     def aggiorna_atleta(self, atleta_id: int, nome: str, cognome: str, ruolo: str, numero: int, foto_base64: str = None) -> bool:
         return self.modifica_atleta(atleta_id, nome, cognome, ruolo, numero, foto_base64)
 
-    def aggiorna_anagrafica_atleta(self, atleta_id: int, dn, ln, cf, ind, cit, cap, naz, vis, email=None) -> bool:
+    def aggiorna_anagrafica_atleta(self, atleta_id: int, dn, ln, cf, ind, cit, cap, naz, vis, tel=None, email=None) -> bool:
         try:
             self.supabase.table("atleti").update({
                 "data_nascita": dn, 
@@ -115,6 +115,7 @@ class Database:
                 "cap": cap, 
                 "nazionalita": naz, 
                 "scadenza_visita": vis,
+                "telefono": tel,
                 "email": email
             }).eq("id", atleta_id).execute()
             return True
@@ -147,7 +148,7 @@ class Database:
                     i["id"], i["nome"], i["cognome"], i["ruolo"], i["numero_maglia"], 
                     i.get("data_nascita"), i.get("luogo_nascita"), i.get("codice_fiscale"), 
                     i.get("indirizzo"), i.get("citta"), i.get("cap"), i.get("nazionalita"), 
-                    i.get("scadenza_visita"), i.get("foto"), i.get("email")
+                    i.get("scadenza_visita"), i.get("foto"), i.get("email"), i.get("telefono")
                 )
             return None
         except Exception as e:
@@ -188,7 +189,7 @@ class Database:
     def ottieni_tutti_atleti_completi(self) -> list:
         try:
             res = self.supabase.table("atleti").select(
-                "id, nome, cognome, ruolo, numero_maglia, data_nascita, luogo_nascita, codice_fiscale, indirizzo, citta, cap, nazionalita, scadenza_visita, email, squadre(nome, categoria)"
+                "id, nome, cognome, ruolo, numero_maglia, data_nascita, luogo_nascita, codice_fiscale, indirizzo, citta, cap, nazionalita, scadenza_visita, email, telefono, squadre(nome, categoria)"
             ).execute()
             
             risultati = []
@@ -201,7 +202,7 @@ class Database:
                     sq_nome, sq_cat,
                     i.get("data_nascita"), i.get("luogo_nascita"), i.get("codice_fiscale"),
                     i.get("indirizzo"), i.get("citta"), i.get("cap"), i.get("nazionalita"), 
-                    i.get("scadenza_visita"), i.get("email")
+                    i.get("scadenza_visita"), i.get("email"), i.get("telefono")
                 ))
             return risultati
         except Exception as e:
