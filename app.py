@@ -618,39 +618,60 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
                 ]
 
-            # 2. Controlli per aggiungere le pedine dei ruoli
-            st.write("🎯 **Aggiungi Pedine sul Campo:**")
+            # 2. Controlli per aggiungere le pedine dei ruoli (Semicerchi con Iniziale)
+            st.write("🎯 **Aggiungi Pedine sul Campo (Semicerchi):**")
             col_p1, col_p2, col_p3, col_p4, col_p5, col_p6, col_p7 = st.columns(7)
             
-            def aggiungi_pedina(testo, colore):
-                st.session_state.canvas_objects.append({
-                    "type": "textbox",
-                    "text": testo,
-                    "left": 285,
+            def aggiungi_pedina_semicerchio(ruolo, colore_sfondo, colore_testo="#FFFFFF"):
+                # Creiamo un gruppo Fabric composto dal semicerchio + testo dell'iniziale
+                # Path SVG per un semicerchio: partenza (0,25), linea orizzontale fino a (50,25), arco fino a (0,25)
+                semicircle_path = "M 0 25 L 50 25 A 25 25 0 0 0 0 25 Z"
+                
+                pedina_group = {
+                    "type": "group",
+                    "left": 275,
                     "top": 185,
-                    "fontSize": 24,
-                    "fontWeight": "bold",
-                    "fill": colore,
-                    "backgroundColor": "#FFFFFF",
-                    "padding": 5,
-                    "rx": 15,
-                    "ry": 15,
+                    "width": 50,
+                    "height": 30,
+                    "objects": [
+                        {
+                            "type": "path",
+                            "path": semicircle_path,
+                            "fill": colore_sfondo,
+                            "stroke": "#FFFFFF",
+                            "strokeWidth": 2,
+                            "left": -25,
+                            "top": -15
+                        },
+                        {
+                            "type": "textbox",
+                            "text": ruolo,
+                            "fontSize": 16,
+                            "fontWeight": "bold",
+                            "fill": colore_testo,
+                            "textAlign": "center",
+                            "left": -7,
+                            "top": -8,
+                            "width": 20
+                        }
+                    ],
                     "hasControls": True,
                     "selectable": True
-                })
+                }
+                st.session_state.canvas_objects.append(pedina_group)
 
             if col_p1.button("➕ **A** (Alzatore)"):
-                aggiungi_pedina(" A ", "#0000FF")
+                aggiungi_pedina_semicerchio("A", "#1E90FF")
             if col_p2.button("➕ **O** (Opposto)"):
-                aggiungi_pedina(" O ", "#FF0000")
+                aggiungi_pedina_semicerchio("O", "#FF4500")
             if col_p3.button("➕ **S** (Schiacc.)"):
-                aggiungi_pedina(" S ", "#008000")
+                aggiungi_pedina_semicerchio("S", "#2E8B57")
             if col_p4.button("➕ **C** (Centrale)"):
-                aggiungi_pedina(" C ", "#800080")
+                aggiungi_pedina_semicerchio("C", "#8A2BE2")
             if col_p5.button("➕ **L** (Libero)"):
-                aggiungi_pedina(" L ", "#FFA500")
+                aggiungi_pedina_semicerchio("L", "#FFA500")
             if col_p6.button("➕ **T** (Tecnico)"):
-                aggiungi_pedina(" T ", "#000000")
+                aggiungi_pedina_semicerchio("T", "#333333")
             if col_p7.button("🔄 **Reset Campo**"):
                 st.session_state.canvas_objects = [
                     {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False},
@@ -660,7 +681,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
                 ]
                 st.rerun()
-
             # 3. Selezione strumenti di disegno
             col_tools, col_space = st.columns([3, 1])
             with col_tools:
