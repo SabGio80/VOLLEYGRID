@@ -21,7 +21,6 @@ def verifica_login(username, password):
     if hasattr(db, 'verifica_utente'):
         return db.verifica_utente(username, password)
     
-    # Credenziali di test / fallback
     if username == "allenatore" and password == "admin123":
         return "admin"
     elif username == "ospite" and password == "view123":
@@ -52,7 +51,6 @@ if not st.session_state.logged_in:
             st.error("Credenziali errate.")
     st.stop()
 
-# Flag di controllo permessi Admin vs Viewer
 is_admin = (st.session_state.user_role == "admin")
 
 # --- BARRA LATERALE E HEADER ---
@@ -356,6 +354,7 @@ elif st.session_state.active_tab == "Rosa Atleti":
                                 dn = st.text_input("Data Nascita (GG/MM/AAAA)", value=curr[5] or "", key=f"dn_{atleta_id_scelto}", disabled=not is_admin)
                                 ln = st.text_input("Luogo Nascita", value=curr[6] or "", key=f"ln_{atleta_id_scelto}", disabled=not is_admin)
                                 cf = st.text_input("Codice Fiscale", value=curr[7] or "", key=f"cf_{atleta_id_scelto}", disabled=not is_admin)
+                                tel = st.text_input("Telefono / Cellulare", value=curr[13] if len(curr) > 13 and curr[13] else "", key=f"tel_{atleta_id_scelto}", disabled=not is_admin)
                                 ind = st.text_input("Indirizzo", value=curr[8] or "", key=f"ind_{atleta_id_scelto}", disabled=not is_admin)
                                 cit = st.text_input("Città", value=curr[9] or "", key=f"cit_{atleta_id_scelto}", disabled=not is_admin)
                                 cap = st.text_input("CAP", value=curr[10] or "", key=f"cap_{atleta_id_scelto}", disabled=not is_admin)
@@ -363,7 +362,7 @@ elif st.session_state.active_tab == "Rosa Atleti":
                                 vis = st.text_input("Scadenza Visita (GG/MM/AAAA)", value=curr[12] or "", key=f"vis_{atleta_id_scelto}", disabled=not is_admin)
                                 
                                 if st.button("Aggiorna Anagrafica", disabled=not is_admin):
-                                    db.aggiorna_anagrafica_atleta(atleta_id_scelto, dn, ln, cf, ind, cit, cap, naz, vis)
+                                    db.aggiorna_anagrafica_atleta(atleta_id_scelto, dn, ln, cf, ind, cit, cap, naz, vis, tel)
                                     st.success("Anagrafica aggiornata!")
                                     st.rerun()
 
@@ -446,32 +445,36 @@ elif st.session_state.active_tab == "Reportistica":
     st.title("📊 Generatore di Report Personalizzati")
     st.write("Seleziona i campi e le righe da includere, verifica l'anteprima in tempo reale e scarica il report in Excel o PDF.")
 
-    # Recupero dati dal database
     dati_atleti = db.ottieni_tutti_atleti_completi()
     dati_antropometria = db.ottieni_tutte_antropometrie_complete()
 
     if dati_atleti:
         cols_atl = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
-                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita"]
-        df_atl = pd.DataFrame(dati_atleti, columns=cols_atl)
+                    "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita", "Telefono"]
+        
+        # Gestione di retrocompatibilità se la tupla restituita ha meno o più colonne
+        df_atl = pd.DataFrame(dati_atleti)
+        if df_atl.shape[1] == len(cols_atl):
+            df_atl.columns = cols_atl
+        else:
+            cols_fallback = ["ID", "Nome", "Cognome", "Ruolo", "Numero", "Squadra", "Categoria", 
+                             "Data Nascita", "Luogo Nascita", "Codice Fiscale", "Indirizzo", "Città", "CAP", "Nazionalità", "Scadenza Visita"]
+            df_atl = df_atl.iloc[:, :len(cols_fallback)]
+            df_atl.columns = cols_fallback
+            df_atl["Telefono"] = "-"
 
         if dati_antropometria:
             cols_ant = ["ID_Ant", "Cognome", "Nome", "Squadra", "Data Rilevazione", "Altezza", "Peso", 
                         "Reach Attacco", "Vertec Attacco", "Jump Attacco", 
                         "Reach Muro", "Vertec Muro", "Jump Muro"]
             df_ant = pd.DataFrame(dati_antropometria, columns=cols_ant)
-            
-            # Calcolo dei Differenziali
             df_ant["Diff. Salti (Att. - Muro)"] = pd.to_numeric(df_ant["Jump Attacco"], errors='coerce') - pd.to_numeric(df_ant["Jump Muro"], errors='coerce')
-            
-            # Unione dati
             df_merged = pd.merge(df_atl, df_ant, on=["Cognome", "Nome", "Squadra"], how="left")
         else:
             df_merged = df_atl
 
         st.markdown("---")
         
-        # Titolo e nome file
         col_tit1, col_tit2 = st.columns([2, 1])
         with col_tit1:
             report_title = st.text_input("🏷️ Inserisci il Titolo del Report", value="Report Personalizzato Atleti")
@@ -482,7 +485,7 @@ elif st.session_state.active_tab == "Reportistica":
 
         st.markdown("---")
 
-        # Selezione dei campi (Colonne) tramite Checkbox
+        # Selezione colonne tramite Checkbox
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -502,6 +505,7 @@ elif st.session_state.active_tab == "Reportistica":
 
         with col3:
             st.markdown("### 🏠 Contatti")
+            inc_tel = st.checkbox("Telefono / Cellulare", value=True)
             inc_ind = st.checkbox("Indirizzo", value=False)
             inc_cit = st.checkbox("Città", value=False)
             inc_cap = st.checkbox("CAP", value=False)
@@ -519,7 +523,6 @@ elif st.session_state.active_tab == "Reportistica":
             inc_j_mur = st.checkbox("Jump Muro", value=True)
             inc_d_salti = st.checkbox("Diff. Salti (Attacco - Muro)", value=True)
 
-        # Costruzione lista colonne
         colonne_selezionate = ["Cognome", "Nome"]
 
         if inc_squadra: colonne_selezionate.append("Squadra")
@@ -533,6 +536,7 @@ elif st.session_state.active_tab == "Reportistica":
         if inc_naz: colonne_selezionate.append("Nazionalità")
         if inc_visita: colonne_selezionate.append("Scadenza Visita")
 
+        if inc_tel: colonne_selezionate.append("Telefono")
         if inc_ind: colonne_selezionate.append("Indirizzo")
         if inc_cit: colonne_selezionate.append("Città")
         if inc_cap: colonne_selezionate.append("CAP")
@@ -549,7 +553,6 @@ elif st.session_state.active_tab == "Reportistica":
             if inc_j_mur: colonne_selezionate.append("Jump Muro")
             if inc_d_salti: colonne_selezionate.append("Diff. Salti (Att. - Muro)")
 
-        # Preparazione DataFrame base con colonna di selezione righe
         df_base = df_merged[colonne_selezionate].fillna("-")
         df_base.insert(0, "Includi", True)
 
@@ -557,7 +560,6 @@ elif st.session_state.active_tab == "Reportistica":
         st.subheader("☑️ Selezione Righe da Includere")
         st.caption("Spunta o despunta la casella 'Includi' per scegliere quali atleti mostrare nell'anteprima ed esportare.")
 
-        # Tabella interattiva per selezionare le righe
         edited_df = st.data_editor(
             df_base,
             column_config={
@@ -573,17 +575,14 @@ elif st.session_state.active_tab == "Reportistica":
             key="editor_righe_report"
         )
 
-        # Filtraggio righe selezionate
         df_report = edited_df[edited_df["Includi"] == True].drop(columns=["Includi"])
 
         st.markdown("---")
         st.subheader(f"📋 Anteprima Finale Report: {report_title} ({len(df_report)} atleti selezionati)")
         
         if not df_report.empty:
-            # Anteprima della tabella finale che verrà stampata/scaricata
             st.dataframe(df_report, use_container_width=True, hide_index=True)
 
-            # Pulsanti Esportazione
             col_exp1, col_exp2 = st.columns(2)
 
             with col_exp1:
