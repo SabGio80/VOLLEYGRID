@@ -600,8 +600,9 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
         # -------------------------------------------------------------------
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Disegna traiettorie, frecce e posiziona le pedine mantenendo i disegni esistenti.")
+            st.caption("Disegna traiettorie, frecce e posiziona le pedine senza rischiare di spostare le linee del campo.")
 
+            import math
             import streamlit_drawable_canvas as sdc
 
             # CSS Inject per garantire la visibilità costante dei pulsanti di controllo in basso
@@ -614,8 +615,8 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     opacity: 1 !important;
                     visibility: visible !important;
                     display: inline-block !important;
-                    filter: invert(1) brightness(2) !important; /* Rende le icone nere visibili anche su tema scuro */
-                    background-color: rgba(255, 255, 255, 0.15) !important;
+                    filter: invert(1) brightness(2) !important;
+                    background-color: rgba(255, 255, 255, 0.2) !important;
                     border-radius: 4px !important;
                     margin: 2px !important;
                 }
@@ -624,20 +625,32 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 unsafe_allow_html=True
             )
 
-            # 1. Inizializzazione degli oggetti base del campo
-            if "canvas_objects" not in st.session_state:
-                st.session_state.canvas_objects = [
-                    {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False},
-                    {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False},
-                    {"type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370, "stroke": "white", "strokeWidth": 4, "selectable": False},
-                    {"type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
-                    {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
+            # Funzione per generare lo sfondo del campo con oggetti BLOCCATI
+            def get_campo_base_objects():
+                return [
+                    {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
+                    {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
+                    {"type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370, "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
+                    {"type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
+                    {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False, "lockMovementX": True, "lockMovementY": True},
                 ]
+
+            # 1. Inizializzazione degli oggetti base del campo
+            if "canvas_objects" not in st.session_state or not st.session_state.canvas_objects:
+                st.session_state.canvas_objects = get_campo_base_objects()
 
             def aggiorna_stato_canvas():
                 if "last_canvas_data" in st.session_state and st.session_state.last_canvas_data is not None:
                     if "objects" in st.session_state.last_canvas_data:
-                        st.session_state.canvas_objects = st.session_state.last_canvas_data["objects"]
+                        # Manteniamo le linee del campo sempre non selezionabili
+                        objs = st.session_state.last_canvas_data["objects"]
+                        for obj in objs:
+                            if obj.get("fill") == "#D2691E" or (obj.get("stroke") == "white" and obj.get("selectable") == False):
+                                obj["selectable"] = False
+                                obj["evented"] = False
+                                obj["lockMovementX"] = True
+                                obj["lockMovementY"] = True
+                        st.session_state.canvas_objects = objs
 
             # 2. Pulsanti pedine
             st.write("🎯 **Inserisci Pedine sul Campo:**")
@@ -692,18 +705,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 aggiungi_pedina_semicerchio("L", "#FFA500")
             if col_p6.button("➕ **T** (Tecni.)"):
                 aggiungi_pedina_semicerchio("T", "#333333")
-            if col_p7.button("🔄 **Reset**"):
-                st.session_state.canvas_objects = [
-                    {"type": "rect", "left": 0, "top": 0, "width": 600, "height": 400, "fill": "#D2691E", "selectable": False},
-                    {"type": "rect", "left": 30, "top": 30, "width": 540, "height": 340, "fill": "transparent", "stroke": "white", "strokeWidth": 4, "selectable": False},
-                    {"type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370, "stroke": "white", "strokeWidth": 4, "selectable": False},
-                    {"type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
-                    {"type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370, "stroke": "white", "strokeWidth": 2, "selectable": False},
-                ]
+            if col_p7.button("🔄 **Reset Campo**"):
+                st.session_state.canvas_objects = get_campo_base_objects()
                 st.session_state.last_canvas_data = None
                 st.rerun()
 
-            # 3. Menu Strumenti (inclusa la Freccia nello stesso menu)
+            # 3. Menu Strumenti
             col_tools, col_space = st.columns([3, 1])
             with col_tools:
                 strumenti_map = {
@@ -718,8 +725,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 with c_t1:
                     strumento_scelto = st.selectbox("Modalità:", list(strumenti_map.keys()), key="draw_mode_label")
                     raw_mode = strumenti_map[strumento_scelto]
-                    
-                    # Se l'utente seleziona "Freccia Direzionale", usiamo la modalità "line" compatibile col componente
                     drawing_mode = "line" if raw_mode == "line_arrow" else raw_mode
 
                 with c_t2:
@@ -730,33 +735,41 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             col_canv, col_info_ex = st.columns([3, 2])
 
             with col_canv:
-                # Se è attiva la modalità freccia, processiamo gli ultimi oggetti linea convertendo le ultime coordinate in punta di freccia
+                # Controlla se è stata tracciata una linea in modalità Freccia Direzionale ed aggiunge la punta
                 if raw_mode == "line_arrow" and "last_canvas_data" in st.session_state and st.session_state.last_canvas_data:
                     objs = st.session_state.last_canvas_data.get("objects", [])
-                    if objs and objs[-1].get("type") == "line" and not objs[-1].get("is_arrow_processed"):
-                        last_line = objs[-1]
-                        last_line["is_arrow_processed"] = True
-                        
-                        # Calcolo delle coordinate per la punta della freccia
-                        import math
-                        x1, y1 = last_line["x1"], last_line["y1"]
-                        x2, y2 = last_line["x2"], last_line["y2"]
-                        angle = math.atan2(y2 - y1, x2 - x1)
-                        head_len = 15
-                        
-                        p1_x = x2 - head_len * math.cos(angle - math.pi / 6)
-                        p1_y = y2 - head_len * math.sin(angle - math.pi / 6)
-                        p2_x = x2 - head_len * math.cos(angle + math.pi / 6)
-                        p2_y = y2 - head_len * math.sin(angle + math.pi / 6)
-                        
-                        arrow_head = {
-                            "type": "polygon",
-                            "points": [{"x": x2, "y": y2}, {"x": p1_x, "y": p1_y}, {"x": p2_x, "y": p2_y}],
-                            "fill": stroke_color,
-                            "stroke": stroke_color,
-                            "strokeWidth": 1
-                        }
-                        st.session_state.canvas_objects = objs + [arrow_head]
+                    if objs:
+                        last_obj = objs[-1]
+                        if last_obj.get("type") == "line" and not last_obj.get("is_arrow"):
+                            last_obj["is_arrow"] = True
+                            
+                            x1 = last_obj.get("x1", 0)
+                            y1 = last_obj.get("y1", 0)
+                            x2 = last_obj.get("x2", 0)
+                            y2 = last_obj.get("y2", 0)
+                            
+                            # Calcolo angolo e coordinate triangolo della punta
+                            angle = math.atan2(y2 - y1, x2 - x1)
+                            head_len = max(15, stroke_width * 4)
+                            
+                            p1_x = x2 - head_len * math.cos(angle - math.pi / 6)
+                            p1_y = y2 - head_len * math.sin(angle - math.pi / 6)
+                            p2_x = x2 - head_len * math.cos(angle + math.pi / 6)
+                            p2_y = y2 - head_len * math.sin(angle + math.pi / 6)
+                            
+                            arrow_head = {
+                                "type": "polygon",
+                                "points": [
+                                    {"x": x2, "y": y2},
+                                    {"x": p1_x, "y": p1_y},
+                                    {"x": p2_x, "y": p2_y}
+                                ],
+                                "fill": stroke_color,
+                                "stroke": stroke_color,
+                                "strokeWidth": 1
+                            }
+                            st.session_state.canvas_objects = objs + [arrow_head]
+                            st.rerun()
 
                 initial_json = {"objects": st.session_state.canvas_objects}
 
@@ -769,7 +782,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     width=600,
                     drawing_mode=drawing_mode,
                     initial_drawing=initial_json,
-                    key="volleyball_canvas_v6"
+                    key="volleyball_canvas_v7"
                 )
 
                 if canvas_result and canvas_result.json_data:
