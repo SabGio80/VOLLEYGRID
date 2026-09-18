@@ -6,13 +6,20 @@ from datetime import datetime
 from PIL import Image, ImageDraw
 from database import Database
 
-# --- FIX COMPATIBILITÀ STREAMLIT 1.29+ PER CANVAS ---
+# --- FIX COMPATIBILITÀ STREAMLIT 1.29+ / ST-DRAWABLE-CANVAS ---
 try:
-    from streamlit.elements.image import image_to_url
-except ImportError:
-    from streamlit.elements.lib.image_utils import image_to_url
+    from streamlit.elements.image import image_to_url as _image_to_url
+    
+    def image_to_url_patch(image, width=None, clamp=False, channels="RGB", output_format="PNG", image_id=None, *args, **kwargs):
+        # Gestisce lo shift di parametri tra le firme vecchie/nuove di Streamlit
+        if isinstance(width, int):
+            return _image_to_url(image, width=width, clamp=clamp, channels=channels, output_format=output_format, image_id=image_id)
+        return _image_to_url(image, width, clamp, channels, output_format, image_id, *args, **kwargs)
+
     import streamlit.elements.image as st_image
-    st_image.image_to_url = image_to_url
+    st_image.image_to_url = image_to_url_patch
+except Exception:
+    pass
 
 # Import Canvas Interattivo
 from streamlit_drawable_canvas import st_canvas
@@ -614,7 +621,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
 
             # Funzione per costruire l'immagine di sfondo del campo (Bianco con Linee Nere)
             def crea_campo_pallavolo_bianco(width=400, height=600):
-                img = Image.new("RGBA", (width, height), "white")
+                img = Image.new("RGB", (width, height), "white")
                 draw = ImageDraw.Draw(img)
                 
                 m = 20  # Margine
@@ -631,11 +638,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 return img
 
             bg_campo_pil = crea_campo_pallavolo_bianco(400, 600)
-            
-            # Gestione buffer di memoria dell'immagine per evitare bug di firme su Streamlit 1.29+
-            bg_bytes = io.BytesIO()
-            bg_campo_pil.save(bg_bytes, format="PNG")
-            bg_campo_bytes = Image.open(bg_bytes)
 
             col_c1, col_c2 = st.columns([1, 2])
 
@@ -669,12 +671,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             with col_c2:
                 st.write("**Campo da Gioco Interattivo**")
                 
-                # Canvas vettoriale interattivo
+                # Canvas vettoriale interattivo con passa-immagine PIL diretto
                 canvas_result = st_canvas(
                     fill_color=fill_color,
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_image=bg_campo_bytes,
+                    background_image=bg_campo_pil,
                     update_streamlit=True,
                     height=600,
                     width=400,
