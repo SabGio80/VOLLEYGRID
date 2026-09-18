@@ -6,7 +6,15 @@ from datetime import datetime
 from PIL import Image, ImageDraw
 from database import Database
 
-# Import Canvas Interattivo per la Lavagna Tattica
+# --- FIX COMPATIBILITÀ STREAMLIT 1.29+ PER CANVAS ---
+try:
+    from streamlit.elements.image import image_to_url
+except ImportError:
+    from streamlit.elements.lib.image_utils import image_to_url
+    import streamlit.elements.image as st_image
+    st_image.image_to_url = image_to_url
+
+# Import Canvas Interattivo
 from streamlit_drawable_canvas import st_canvas
 
 # Import ReportLab per l'esportazione PDF
