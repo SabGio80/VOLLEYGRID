@@ -4,7 +4,10 @@ import pandas as pd
 import base64
 from datetime import datetime
 from database import Database
-from streamlit_drawable_canvas import st_canvas
+
+# Import per la grafica del campo tattico tramite Matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 # Import ReportLab per l'esportazione PDF
 from reportlab.lib.pagesizes import letter, landscape, A4
@@ -101,6 +104,9 @@ if "grid_sq_key" not in st.session_state:
 
 if "editing_seduta_idx" not in st.session_state:
     st.session_state.editing_seduta_idx = None
+
+if "elementi_campo" not in st.session_state:
+    st.session_state.elementi_campo = []
 
 # --- SELEZIONE STAGIONE E SQUADRA ---
 stagioni = db.ottieni_stagioni()
@@ -500,7 +506,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     titolo_exp = f"📌 {seduta['Seduta']} - {seduta['Data']} ({seduta.get('Ora Inizio','--')} - {seduta.get('Ora Fine','--')}) | {seduta.get('Luogo','')}"
                     
                     with st.expander(titolo_exp, expanded=(idx == 0)):
-                        # SEZIONE MODIFICA INTESTAZIONE SEDUTA
                         if is_editing:
                             st.markdown("##### ✏️ Modifica Dati Generali Seduta")
                             mod_n_seduta = st.text_input("Nome Seduta", value=seduta['Seduta'], key=f"edit_nsed_{idx}")
@@ -597,79 +602,110 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                             st.session_state.progr_sedute.pop(idx)
                             st.rerun()
 
+        # --- SEZIONE CAMPO TATTICO MATPLOTLIB ---
         with tab_creatore:
-            st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Campo di pallavolo regolamentare integrato. Aggiungi giocatrici per ruolo, frecce, forme e oggetti.")
+            st.subheader("✏️ Lavagna Tattica & Disegno Schemi (Matplotlib Layer)")
+            st.caption("Aggiungi giocatori, coni, palloni e frecce. Gli elementi vengono inseriti in stratificazione vettoriale costante.")
 
-            # Funzione per caricare gli oggetti base del campo regolamentare
-            def get_volleyball_court_objects():
-                return [
-                    # Campo Parquet / Sfondo
-                    {"type": "rect", "left": 20, "top": 20, "width": 560, "height": 360, "fill": "#D2691E", "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False},
-                    # Linea centrale di rete
-                    {"type": "line", "x1": 300, "y1": 20, "x2": 300, "y2": 380, "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False},
-                    # Linea 3 Metri Sinistra
-                    {"type": "line", "x1": 200, "y1": 20, "x2": 200, "y2": 380, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False},
-                    # Linea 3 Metri Destra
-                    {"type": "line", "x1": 400, "y1": 20, "x2": 400, "y2": 380, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False},
-                    # Rete Tattica Visibile
-                    {"type": "line", "x1": 300, "y1": 10, "x2": 300, "y2": 390, "stroke": "#1A2B4C", "strokeWidth": 6, "selectable": False, "evented": False}
-                ]
+            # Funzione per costruire la figura Matplotlib con il campo e gli oggetti inseriti
+            def render_campo_figura(elementi):
+                fig, ax = plt.subplots(figsize=(6, 9))
+                fig.patch.set_facecolor('#1e1e1e')
+                ax.set_facecolor('#d35400') # Colore arancione campo
 
-            if "canvas_objects" not in st.session_state:
-                st.session_state.canvas_objects = get_volleyball_court_objects()
+                ax.set_xlim(-0.5, 9.5)
+                ax.set_ylim(-0.5, 18.5)
+                ax.axis('off')
+
+                # Struttura del campo (Layer 1)
+                ax.add_patch(patches.Rectangle((0, 0), 9, 18, linewidth=2, edgecolor='white', facecolor='none', zorder=1))
+                ax.plot([0, 9], [9, 9], color='black', linewidth=4, zorder=2) # Rete
+                ax.plot([0, 9], [6, 6], color='white', linestyle='--', linewidth=1.5, zorder=1) # Attacco Sx
+                ax.plot([0, 9], [12, 12], color='white', linestyle='--', linewidth=1.5, zorder=1) # Attacco Dx
+
+                # Disegno Oggetti Sovrapposti (Layer 3+)
+                for el in elementi:
+                    tipo = el.get("tipo")
+                    if tipo == "giocatore":
+                        c = patches.Circle((el["x"], el["y"]), 0.45, facecolor=el.get("colore", "#2980b9"), edgecolor='white', linewidth=1.5, zorder=3)
+                        ax.add_patch(c)
+                        ax.text(el["x"], el["y"], f"{el['ruolo']}\n{el['num']}", color='white', weight='bold', fontsize=8, ha='center', va='center', zorder=4)
+                    elif tipo == "cono":
+                        t = patches.RegularPolygon((el["x"], el["y"]), numVertices=3, radius=0.35, facecolor='#e67e22', edgecolor='black', zorder=3)
+                        ax.add_patch(t)
+                    elif tipo == "palla":
+                        p = patches.Circle((el["x"], el["y"]), 0.25, facecolor='#f1c40f', edgecolor='#2c3e50', linewidth=1.5, zorder=3)
+                        ax.add_patch(p)
+                    elif tipo == "freccia":
+                        ax.annotate('', xy=(el["x2"], el["y2"]), xytext=(el["x1"], el["y1"]),
+                                    arrowprops=dict(facecolor=el.get("colore", "#f1c40f"), edgecolor='black', shrink=0.05, width=2, headwidth=8), zorder=3)
+                
+                plt.tight_layout()
+                return fig
 
             col_c1, col_c2 = st.columns([1, 2])
 
             with col_c1:
-                st.write("**Strumenti di Disegno & Oggetti**")
-                tool_mode = st.selectbox(
-                    "Modalità Canvas",
-                    ["transform", "freeline", "line", "rect", "circle"],
-                    format_func=lambda x: {
-                        "transform": "🖐️ Sposta / Seleziona / Ruota",
-                        "freeline": "✏️ Disegno Libero",
-                        "line": "📏 Linea Dritta",
-                        "rect": "🔲 Rettangolo / Quadrato",
-                        "circle": "⚪ Cerchio / Pallone"
-                    }[x],
-                    disabled=not is_admin
-                )
+                st.write("**➕ Inserisci Elementi sul Campo**")
                 
-                stroke_width = st.slider("Spessore Tratto", 1, 10, 3, disabled=not is_admin)
-                stroke_color = st.color_picker("Colore Elementi", "#FFFFFF", disabled=not is_admin)
-
-                st.write("**➕ Inserisci Giocatori & Attrezzi sul Campo**")
-                c_add1, c_add2 = st.columns(2)
-                with c_add1:
-                    ruolo_add = st.selectbox("Ruolo Giocatore", ["Alzatore (P)", "Opposto (O)", "Schiacciatore (S)", "Centrale (C)", "Libero (L)"], disabled=not is_admin)
-                    colore_pedina = st.color_picker("Colore Pedina", "#1E90FF", disabled=not is_admin)
-                    if st.button("➕ Aggiungi Giocatore", disabled=not is_admin):
-                        codice_r = ruolo_add.split("(")[1].replace(")", "")
-                        # Aggiunta pedina giocatore sul canvas
-                        st.session_state.canvas_objects.extend([
-                            {"type": "circle", "left": 280, "top": 180, "radius": 15, "fill": colore_pedina, "stroke": "white", "strokeWidth": 2},
-                            {"type": "textbox", "left": 273, "top": 172, "text": codice_r, "fontSize": 14, "fill": "white", "fontFamily": "sans-serif", "fontWeight": "bold"}
-                        ])
+                tipo_elem = st.selectbox("Seleziona Elemento", ["Giocatore", "Cono Ostacolo", "Pallone", "Freccia Tattica"], disabled=not is_admin)
+                
+                if tipo_elem == "Giocatore":
+                    col_g1, col_g2 = st.columns(2)
+                    with col_g1:
+                        g_ruolo = st.selectbox("Ruolo", ["P", "O", "S", "C", "L"], disabled=not is_admin)
+                        g_num = st.number_input("N° Maglia", min_value=1, max_value=99, value=1, disabled=not is_admin)
+                        g_colore = st.color_picker("Colore Maglia", "#2980b9", disabled=not is_admin)
+                    with col_g2:
+                        g_x = st.slider("Coordinate X (0-9m)", 0.0, 9.0, 4.5, step=0.5, key="g_x", disabled=not is_admin)
+                        g_y = st.slider("Coordinate Y (0-18m)", 0.0, 18.0, 4.5, step=0.5, key="g_y", disabled=not is_admin)
+                    
+                    if st.button("➕ Inserisci Giocatore", disabled=not is_admin):
+                        st.session_state.elementi_campo.append({
+                            "tipo": "giocatore", "ruolo": g_ruolo, "num": g_num, "x": g_x, "y": g_y, "colore": g_colore
+                        })
                         st.rerun()
 
-                with c_add2:
-                    tipo_obj = st.selectbox("Elemento / Attrezzo", ["Ostacolo / Cono", "Palla / Bersaglio", "Freccia Direzionale"], disabled=not is_admin)
-                    if st.button("➕ Aggiungi Elemento", disabled=not is_admin):
-                        if tipo_obj == "Ostacolo / Cono":
-                            st.session_state.canvas_objects.append({"type": "rect", "left": 280, "top": 180, "width": 20, "height": 20, "fill": "#FF4500", "stroke": "white", "strokeWidth": 1})
-                        elif tipo_obj == "Palla / Bersaglio":
-                            st.session_state.canvas_objects.append({"type": "circle", "left": 285, "top": 185, "radius": 10, "fill": "#FFD700", "stroke": "black", "strokeWidth": 1})
-                        elif tipo_obj == "Freccia Direzionale":
-                            st.session_state.canvas_objects.extend([
-                                {"type": "line", "x1": 250, "y1": 200, "x2": 320, "y2": 200, "stroke": stroke_color, "strokeWidth": stroke_width},
-                                {"type": "triangle", "left": 315, "top": 192, "width": 15, "height": 15, "fill": stroke_color, "angle": 90}
-                            ])
+                elif tipo_elem == "Cono Ostacolo":
+                    c_x = st.slider("Coordinate X (0-9m)", 0.0, 9.0, 4.5, step=0.5, key="c_x", disabled=not is_admin)
+                    c_y = st.slider("Coordinate Y (0-18m)", 0.0, 18.0, 9.0, step=0.5, key="c_y", disabled=not is_admin)
+                    if st.button("➕ Inserisci Cono", disabled=not is_admin):
+                        st.session_state.elementi_campo.append({"tipo": "cono", "x": c_x, "y": c_y})
                         st.rerun()
 
-                if is_admin and st.button("🔄 Ripristina Campo Vuoto"):
-                    st.session_state.canvas_objects = get_volleyball_court_objects()
-                    st.rerun()
+                elif tipo_elem == "Pallone":
+                    p_x = st.slider("Coordinate X (0-9m)", 0.0, 9.0, 4.5, step=0.5, key="p_x", disabled=not is_admin)
+                    p_y = st.slider("Coordinate Y (0-18m)", 0.0, 18.0, 2.0, step=0.5, key="p_y", disabled=not is_admin)
+                    if st.button("➕ Inserisci Pallone", disabled=not is_admin):
+                        st.session_state.elementi_campo.append({"tipo": "palla", "x": p_x, "y": p_y})
+                        st.rerun()
+
+                elif tipo_elem == "Freccia Tattica":
+                    cf1, cf2 = st.columns(2)
+                    with cf1:
+                        f_x1 = st.number_input("Inizio X", 0.0, 9.0, 4.5, step=0.5, disabled=not is_admin)
+                        f_y1 = st.number_input("Inizio Y", 0.0, 18.0, 3.0, step=0.5, disabled=not is_admin)
+                    with cf2:
+                        f_x2 = st.number_input("Fine X", 0.0, 9.0, 4.5, step=0.5, disabled=not is_admin)
+                        f_y2 = st.number_input("Fine Y", 0.0, 18.0, 7.0, step=0.5, disabled=not is_admin)
+                    f_colore = st.color_picker("Colore Freccia", "#f1c40f", disabled=not is_admin)
+                    
+                    if st.button("➕ Inserisci Freccia", disabled=not is_admin):
+                        st.session_state.elementi_campo.append({
+                            "tipo": "freccia", "x1": f_x1, "y1": f_y1, "x2": f_x2, "y2": f_y2, "colore": f_colore
+                        })
+                        st.rerun()
+
+                col_b_reset1, col_b_reset2 = st.columns(2)
+                with col_b_reset1:
+                    if is_admin and st.button("↩️ Rimuovi Ultimo"):
+                        if st.session_state.elementi_campo:
+                            st.session_state.elementi_campo.pop()
+                            st.rerun()
+                with col_b_reset2:
+                    if is_admin and st.button("🔄 Pulisci Campo"):
+                        st.session_state.elementi_campo = []
+                        st.rerun()
 
                 st.divider()
                 st.write("**Dati Esercizio**")
@@ -681,30 +717,15 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             with col_c2:
                 st.write("**Campo da Gioco & Schema Tattico**")
                 
-                initial_drawing = {"objects": st.session_state.canvas_objects}
-                
-                canvas_result = st_canvas(
-                    fill_color="rgba(255, 255, 255, 0.2)",
-                    stroke_width=stroke_width,
-                    stroke_color=stroke_color,
-                    background_color="#2E8B57",
-                    initial_drawing=initial_drawing,
-                    update_streamlit=True,
-                    height=400,
-                    width=600,
-                    drawing_mode=tool_mode if is_admin else "transform",
-                    key="canvas_volleyball_v2"
-                )
+                # Renderizzazione Figura Matplotlib
+                fig_campo = render_campo_figura(st.session_state.elementi_campo)
+                st.pyplot(fig_campo)
 
                 if st.button("💾 Salva Esercizio in Archivio", type="primary", disabled=not is_admin):
-                    img_data = None
-                    if canvas_result.image_data is not None:
-                        from PIL import Image
-                        img = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-                        buffered = io.BytesIO()
-                        img.save(buffered, format="PNG")
-                        b64_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                        img_data = f"data:image/png;base64,{b64_img}"
+                    buffered = io.BytesIO()
+                    fig_campo.savefig(buffered, format="png", bbox_inches='tight', facecolor=fig_campo.get_facecolor())
+                    b64_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                    img_data = f"data:image/png;base64,{b64_img}"
 
                     st.session_state.archivio_esercizi.append({
                         "nome": ex_nome,
