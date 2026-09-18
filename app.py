@@ -630,7 +630,12 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 
                 return img
 
-            bg_campo = crea_campo_pallavolo_bianco(400, 600)
+            bg_campo_pil = crea_campo_pallavolo_bianco(400, 600)
+            
+            # Gestione buffer di memoria dell'immagine per evitare bug di firme su Streamlit 1.29+
+            bg_bytes = io.BytesIO()
+            bg_campo_pil.save(bg_bytes, format="PNG")
+            bg_campo_bytes = Image.open(bg_bytes)
 
             col_c1, col_c2 = st.columns([1, 2])
 
@@ -669,7 +674,7 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                     fill_color=fill_color,
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_image=bg_campo,
+                    background_image=bg_campo_bytes,
                     update_streamlit=True,
                     height=600,
                     width=400,
