@@ -618,7 +618,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             st.subheader("✏️ Lavagna Tattica Interattiva (Sfondo Bianco & Drag-and-Drop)")
             st.caption("Usa la modalità 'Seleziona / Sposta' per trascinare, ruotare o ridimensionare liberamente qualsiasi oggetto inserito nel campo.")
 
-            # Funzione per costruire l'immagine di sfondo del campo (Bianco con Linee Nere)
             def crea_campo_pallavolo_bianco(width=400, height=600):
                 img = Image.new("RGB", (width, height), "white")
                 draw = ImageDraw.Draw(img)
@@ -670,7 +669,6 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
             with col_c2:
                 st.write("**Campo da Gioco Interattivo**")
                 
-                # Canvas vettoriale interattivo con passa-immagine PIL diretto
                 canvas_result = st_canvas(
                     fill_color=fill_color,
                     stroke_width=stroke_width,
