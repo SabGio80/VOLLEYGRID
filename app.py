@@ -9,11 +9,10 @@ from database import Database
 # --- FIX COMPATIBILITÀ STREAMLIT 1.29+ / ST-DRAWABLE-CANVAS ---
 try:
     from streamlit.elements.image import image_to_url as _image_to_url
-    
+
     def image_to_url_patch(image, width=None, clamp=False, channels="RGB", output_format="PNG", image_id=None, *args, **kwargs):
-        # Gestisce lo shift di parametri tra le firme vecchie/nuove di Streamlit
-        if isinstance(width, int):
-            return _image_to_url(image, width=width, clamp=clamp, channels=channels, output_format=output_format, image_id=image_id)
+        if 'width' in kwargs:
+            width = kwargs.pop('width')
         return _image_to_url(image, width, clamp, channels, output_format, image_id, *args, **kwargs)
 
     import streamlit.elements.image as st_image
