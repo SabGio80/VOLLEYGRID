@@ -99,6 +99,9 @@ if "modo_nuovo_atleta" not in st.session_state:
 if "grid_sq_key" not in st.session_state:
     st.session_state.grid_sq_key = 0
 
+if "editing_seduta_idx" not in st.session_state:
+    st.session_state.editing_seduta_idx = None
+
 # --- SELEZIONE STAGIONE E SQUADRA ---
 stagioni = db.ottieni_stagioni()
 stagioni_dict = {s[1]: s[0] for s in stagioni}
@@ -143,7 +146,6 @@ if stagione_id:
 with col_top3:
     options_sq = list(squadre_dict.keys()) if squadre_dict else ["Nessuna"]
     
-    # Gestione corretta della selezione dinamica della squadra da tabelle esterne
     if st.session_state.squadra_da_selezionare in options_sq:
         idx_default = options_sq.index(st.session_state.squadra_da_selezionare)
         st.session_state.squadra_da_selezionare = None
@@ -207,8 +209,7 @@ if st.session_state.active_tab == "Gestione Squadre":
         if stagione_id:
             sq_list = db.ottieni_squadre_per_stagione(stagione_id)
             if sq_list:
-                st.caption("💡 Clicca sull'intestazione di una colonna per ordinare. Clicca su una riga per selezionare la squadra ed andare alla sua rosa.")
-                
+                st.caption("💡 Clicca su una riga per selezionare la squadra ed andare alla sua rosa.")
                 df_squadre = pd.DataFrame(sq_list, columns=["ID Database", "Nome Squadra", "Categoria"])
                 
                 event_sq = st.dataframe(
@@ -399,10 +400,7 @@ elif st.session_state.active_tab == "Rosa Atleti":
                         st.rerun()
 
             st.divider()
-
             st.subheader("📋 Elenco Completo Rosa Atleti")
-            st.caption("💡 Clicca su una riga per selezionare l'atleta ed editarne le schede in alto.")
-
             event = st.dataframe(
                 df_atleti[["N° Maglia", "Cognome", "Nome", "Ruolo"]],
                 use_container_width=True,
@@ -498,22 +496,57 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 st.subheader("📅 Schede Sedute Programmate")
                 
                 for idx, seduta in enumerate(st.session_state.progr_sedute):
+                    is_editing = (st.session_state.editing_seduta_idx == idx)
                     titolo_exp = f"📌 {seduta['Seduta']} - {seduta['Data']} ({seduta.get('Ora Inizio','--')} - {seduta.get('Ora Fine','--')}) | {seduta.get('Luogo','')}"
                     
                     with st.expander(titolo_exp, expanded=(idx == 0)):
-                        c_l1, c_l2, c_l3 = st.columns(3)
-                        with c_l1:
-                            seduta['Luogo'] = st.text_input("Luogo", value=seduta.get('Luogo', ''), key=f"luogo_{idx}", disabled=not is_admin)
-                        with c_l2:
-                            seduta['Ora Inizio'] = st.text_input("Ora Inizio", value=seduta.get('Ora Inizio', '18:00'), key=f"oin_{idx}", disabled=not is_admin)
-                        with c_l3:
-                            seduta['Ora Fine'] = st.text_input("Ora Fine", value=seduta.get('Ora Fine', '20:00'), key=f"ofi_{idx}", disabled=not is_admin)
+                        # SEZIONE MODIFICA INTESTAZIONE SEDUTA
+                        if is_editing:
+                            st.markdown("##### ✏️ Modifica Dati Generali Seduta")
+                            mod_n_seduta = st.text_input("Nome Seduta", value=seduta['Seduta'], key=f"edit_nsed_{idx}")
+                            mod_d_seduta = st.text_input("Data (GG/MM/AAAA)", value=seduta['Data'], key=f"edit_dsed_{idx}")
+                            
+                            ce1, ce2, ce3 = st.columns(3)
+                            with ce1:
+                                mod_luogo = st.text_input("Luogo", value=seduta.get('Luogo', ''), key=f"edit_luogo_{idx}")
+                            with ce2:
+                                mod_oin = st.text_input("Ora Inizio", value=seduta.get('Ora Inizio', '18:00'), key=f"edit_oin_{idx}")
+                            with ce3:
+                                mod_ofi = st.text_input("Ora Fine", value=seduta.get('Ora Fine', '20:00'), key=f"edit_ofi_{idx}")
 
-                        c_s1, c_s2 = st.columns(2)
-                        with c_s1:
-                            seduta['Focus Tecnica'] = st.text_input("Focus Tecnico", value=seduta['Focus Tecnica'], key=f"ft_{idx}", disabled=not is_admin)
-                        with c_s2:
-                            seduta['Focus Tattica'] = st.text_input("Focus Tattico", value=seduta['Focus Tattica'], key=f"ftat_{idx}", disabled=not is_admin)
+                            ce_f1, ce_f2 = st.columns(2)
+                            with ce_f1:
+                                mod_ftec = st.text_input("Focus Tecnico", value=seduta.get('Focus Tecnica', ''), key=f"edit_ftec_{idx}")
+                            with ce_f2:
+                                mod_ftat = st.text_input("Focus Tattico", value=seduta.get('Focus Tattica', ''), key=f"edit_ftat_{idx}")
+
+                            c_s1, c_s2 = st.columns(2)
+                            with c_s1:
+                                if st.button("💾 Salva Modifiche Seduta", key=f"btn_save_sed_{idx}", type="primary"):
+                                    seduta['Seduta'] = mod_n_seduta
+                                    seduta['Data'] = mod_d_seduta
+                                    seduta['Luogo'] = mod_luogo
+                                    seduta['Ora Inizio'] = mod_oin
+                                    seduta['Ora Fine'] = mod_ofi
+                                    seduta['Focus Tecnica'] = mod_ftec
+                                    seduta['Focus Tattica'] = mod_ftat
+                                    st.session_state.editing_seduta_idx = None
+                                    st.success("Seduta aggiornata!")
+                                    st.rerun()
+                            with c_s2:
+                                if st.button("Annulla", key=f"btn_cancel_sed_{idx}"):
+                                    st.session_state.editing_seduta_idx = None
+                                    st.rerun()
+                            st.divider()
+                        else:
+                            c_info1, c_info2 = st.columns([3, 1])
+                            with c_info1:
+                                st.write(f"📍 **Luogo:** {seduta.get('Luogo','-')} | ⏱️ **Orario:** {seduta.get('Ora Inizio','--')} - {seduta.get('Ora Fine','--')}")
+                                st.write(f"🎯 **Focus Tecnico:** {seduta.get('Focus Tecnica','-')} | **Focus Tattico:** {seduta.get('Focus Tattica','-')}")
+                            with c_info2:
+                                if is_admin and st.button("✏️ Modifica Dati", key=f"btn_edit_mode_{idx}"):
+                                    st.session_state.editing_seduta_idx = idx
+                                    st.rerun()
 
                         st.write("👥 **Atleti Presenti:**")
                         seduta['Presenti'] = st.multiselect(
@@ -566,46 +599,79 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
 
         with tab_creatore:
             st.subheader("✏️ Lavagna Tattica & Disegno Schemi")
-            st.caption("Campo di sfondo fisso, frecce dritte/curve orientabili e colori personalizzabili.")
+            st.caption("Campo di pallavolo regolamentare integrato. Aggiungi giocatrici per ruolo, frecce, forme e oggetti.")
 
+            # Funzione per caricare gli oggetti base del campo regolamentare
             def get_volleyball_court_objects():
                 return [
-                    {
-                        "type": "rect", "left": 30, "top": 30, "width": 540, "height": 340,
-                        "fill": "#D2691E", "stroke": "white", "strokeWidth": 4,
-                        "selectable": False, "evented": False
-                    },
-                    {
-                        "type": "line", "x1": 300, "y1": 30, "x2": 300, "y2": 370,
-                        "stroke": "white", "strokeWidth": 4,
-                        "selectable": False, "evented": False
-                    },
-                    {
-                        "type": "line", "x1": 210, "y1": 30, "x2": 210, "y2": 370,
-                        "stroke": "white", "strokeWidth": 2,
-                        "selectable": False, "evented": False
-                    },
-                    {
-                        "type": "line", "x1": 390, "y1": 30, "x2": 390, "y2": 370,
-                        "stroke": "white", "strokeWidth": 2,
-                        "selectable": False, "evented": False
-                    }
+                    # Campo Parquet / Sfondo
+                    {"type": "rect", "left": 20, "top": 20, "width": 560, "height": 360, "fill": "#D2691E", "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False},
+                    # Linea centrale di rete
+                    {"type": "line", "x1": 300, "y1": 20, "x2": 300, "y2": 380, "stroke": "white", "strokeWidth": 4, "selectable": False, "evented": False},
+                    # Linea 3 Metri Sinistra
+                    {"type": "line", "x1": 200, "y1": 20, "x2": 200, "y2": 380, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False},
+                    # Linea 3 Metri Destra
+                    {"type": "line", "x1": 400, "y1": 20, "x2": 400, "y2": 380, "stroke": "white", "strokeWidth": 2, "selectable": False, "evented": False},
+                    # Rete Tattica Visibile
+                    {"type": "line", "x1": 300, "y1": 10, "x2": 300, "y2": 390, "stroke": "#1A2B4C", "strokeWidth": 6, "selectable": False, "evented": False}
                 ]
+
+            if "canvas_objects" not in st.session_state:
+                st.session_state.canvas_objects = get_volleyball_court_objects()
 
             col_c1, col_c2 = st.columns([1, 2])
 
             with col_c1:
-                st.write("**Strumenti di Disegno**")
+                st.write("**Strumenti di Disegno & Oggetti**")
                 tool_mode = st.selectbox(
-                    "Strumento",
-                    ["freeline", "line", "rect", "circle", "transform"],
-                    index=0,
+                    "Modalità Canvas",
+                    ["transform", "freeline", "line", "rect", "circle"],
+                    format_func=lambda x: {
+                        "transform": "🖐️ Sposta / Seleziona / Ruota",
+                        "freeline": "✏️ Disegno Libero",
+                        "line": "📏 Linea Dritta",
+                        "rect": "🔲 Rettangolo / Quadrato",
+                        "circle": "⚪ Cerchio / Pallone"
+                    }[x],
                     disabled=not is_admin
                 )
+                
                 stroke_width = st.slider("Spessore Tratto", 1, 10, 3, disabled=not is_admin)
-                stroke_color = st.color_picker("Colore Tratto / Oggetto", "#FFFFFF", disabled=not is_admin)
-                bg_color = "#2E8B57"
+                stroke_color = st.color_picker("Colore Elementi", "#FFFFFF", disabled=not is_admin)
 
+                st.write("**➕ Inserisci Giocatori & Attrezzi sul Campo**")
+                c_add1, c_add2 = st.columns(2)
+                with c_add1:
+                    ruolo_add = st.selectbox("Ruolo Giocatore", ["Alzatore (P)", "Opposto (O)", "Schiacciatore (S)", "Centrale (C)", "Libero (L)"], disabled=not is_admin)
+                    colore_pedina = st.color_picker("Colore Pedina", "#1E90FF", disabled=not is_admin)
+                    if st.button("➕ Aggiungi Giocatore", disabled=not is_admin):
+                        codice_r = ruolo_add.split("(")[1].replace(")", "")
+                        # Aggiunta pedina giocatore sul canvas
+                        st.session_state.canvas_objects.extend([
+                            {"type": "circle", "left": 280, "top": 180, "radius": 15, "fill": colore_pedina, "stroke": "white", "strokeWidth": 2},
+                            {"type": "textbox", "left": 273, "top": 172, "text": codice_r, "fontSize": 14, "fill": "white", "fontFamily": "sans-serif", "fontWeight": "bold"}
+                        ])
+                        st.rerun()
+
+                with c_add2:
+                    tipo_obj = st.selectbox("Elemento / Attrezzo", ["Ostacolo / Cono", "Palla / Bersaglio", "Freccia Direzionale"], disabled=not is_admin)
+                    if st.button("➕ Aggiungi Elemento", disabled=not is_admin):
+                        if tipo_obj == "Ostacolo / Cono":
+                            st.session_state.canvas_objects.append({"type": "rect", "left": 280, "top": 180, "width": 20, "height": 20, "fill": "#FF4500", "stroke": "white", "strokeWidth": 1})
+                        elif tipo_obj == "Palla / Bersaglio":
+                            st.session_state.canvas_objects.append({"type": "circle", "left": 285, "top": 185, "radius": 10, "fill": "#FFD700", "stroke": "black", "strokeWidth": 1})
+                        elif tipo_obj == "Freccia Direzionale":
+                            st.session_state.canvas_objects.extend([
+                                {"type": "line", "x1": 250, "y1": 200, "x2": 320, "y2": 200, "stroke": stroke_color, "strokeWidth": stroke_width},
+                                {"type": "triangle", "left": 315, "top": 192, "width": 15, "height": 15, "fill": stroke_color, "angle": 90}
+                            ])
+                        st.rerun()
+
+                if is_admin and st.button("🔄 Ripristina Campo Vuoto"):
+                    st.session_state.canvas_objects = get_volleyball_court_objects()
+                    st.rerun()
+
+                st.divider()
                 st.write("**Dati Esercizio**")
                 ex_nome = st.text_input("Nome Esercizio", value="Esercizio Tattico 1", disabled=not is_admin)
                 ex_fase = st.selectbox("Fase", ["WARMUP", "TECNICA", "SISTEMA", "TRANSIZIONE", "SITUAZIONALE"], disabled=not is_admin)
@@ -613,21 +679,21 @@ elif st.session_state.active_tab == "Programmazione Allenamenti":
                 ex_desc = st.text_area("Descrizione & Regole", value="Obiettivo e modalità di esecuzione...", disabled=not is_admin)
 
             with col_c2:
-                st.write("**Campo da Gioco & Schema**")
+                st.write("**Campo da Gioco & Schema Tattico**")
                 
-                initial_drawing = {"objects": get_volleyball_court_objects()}
+                initial_drawing = {"objects": st.session_state.canvas_objects}
                 
                 canvas_result = st_canvas(
-                    fill_color="rgba(255, 165, 0, 0.3)",
+                    fill_color="rgba(255, 255, 255, 0.2)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_color=bg_color,
+                    background_color="#2E8B57",
                     initial_drawing=initial_drawing,
                     update_streamlit=True,
                     height=400,
                     width=600,
                     drawing_mode=tool_mode if is_admin else "transform",
-                    key="canvas_volleyball"
+                    key="canvas_volleyball_v2"
                 )
 
                 if st.button("💾 Salva Esercizio in Archivio", type="primary", disabled=not is_admin):
